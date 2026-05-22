@@ -9,7 +9,6 @@ import (
 	"github.com/home-operations/yamlls/internal/document"
 	"github.com/home-operations/yamlls/internal/hover"
 	"github.com/home-operations/yamlls/internal/render"
-	"github.com/home-operations/yamlls/internal/schema"
 	"github.com/home-operations/yamlls/internal/yamlast"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	"github.com/tliron/glsp"
@@ -56,7 +55,7 @@ func (s *Server) schemaAtCursor(uri string, pos protocol.Position) *jsonschema.S
 		parsed := yamlast.ParseForCursor(d.Text, int(pos.Line))
 		cur := yamlast.LocateCursor(parsed, d.Text, pos)
 		if cur.Doc != nil {
-			ref = schema.DetectKubernetesGVKFromNode(cur.Doc.Body)
+			ref = s.resolver.K8sURLForNode(cur.Doc.Body)
 		}
 	}
 	if ref == "" {

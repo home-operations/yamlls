@@ -183,7 +183,7 @@ func (s *Server) setTrace(ctx *glsp.Context, params *protocol.SetTraceParams) er
 func ptr[T any](v T) *T { return &v }
 
 func (s *Server) Notify(uri string, out *render.RenderedOutput, err error) {
-	diags := renderDiagnostics(s.schemas, out, err)
+	diags := renderDiagnostics(s.schemas, s.resolver, out, err)
 
 	s.rendMu.Lock()
 	s.renderedDiags[uri] = diags
@@ -226,18 +226,23 @@ func (s *Server) publishWith(notify glsp.NotifyFunc, d *document.Document) {
 		diags = append(diags, diagnostics.ParseErrorDiagnostic(parsed.Err))
 	}
 
+	// We only surface schema-load failures for FILE-level refs (user
+	// intent: modeline, settings glob, catalog). Per-document K8s
+	// auto-detect is best-effort — CRDs without an online schema would
+	// otherwise spam a warning on every publish.
 	loadFailures := make(map[string]bool)
 	for _, doc := range parsed.Docs() {
 		ref := fileRef
+		userIntent := ref != ""
 		if ref == "" {
-			ref = schema.DetectKubernetesGVKFromNode(doc.Body)
+			ref = s.resolver.K8sURLForNode(doc.Body)
 		}
 		if ref == "" {
 			continue
 		}
 		sch, err := s.schemas.Get(ref, path)
 		if err != nil {
-			if !loadFailures[ref] {
+			if userIntent && !loadFailures[ref] {
 				loadFailures[ref] = true
 				diags = append(diags, schemaLoadDiag(err))
 			}

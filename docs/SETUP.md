@@ -67,16 +67,30 @@ language-servers = ["yamlls"]
 
 ## Zed
 
+Zed's `lsp` key only accepts the names of language servers it knows about,
+so `yamlls` won't work as a top-level key (you'll see
+`Property yamlls is not allowed`). Instead, override the binary of Zed's
+bundled `yaml-language-server` so our binary runs in its place — yamlls
+speaks vanilla LSP and behaves as a drop-in:
+
 ```jsonc
+// ~/.config/zed/settings.json
 {
   "lsp": {
-    "yamlls": { "binary": { "path": "yamlls" } }
-  },
-  "languages": {
-    "YAML": { "language_servers": ["yamlls"] }
+    "yaml-language-server": {
+      "binary": {
+        "ignore_system_version": true,
+        "path": "yamlls"
+      },
+      "initialization_options": {
+        "catalog": true
+      }
+    }
   }
 }
 ```
+
+Workspace config still belongs in `.yamlls.yaml` at the repo root.
 
 ## Flux rendering
 

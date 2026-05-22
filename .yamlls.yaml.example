@@ -9,6 +9,13 @@ schemas:
 catalog: true
 catalogUrl: ""
 
+# kubernetes.schemaUrl overrides the URL template used by apiVersion+kind
+# auto-detect. Placeholders: {group}, {groupSeg}, {groupFirst}, {kind},
+# {kindLower}, {version}, {versionLower}. Defaults to the yannh layout.
+#
+# kubernetes:
+#   schemaUrl: "https://schemas.example.com/{groupSeg}{kindLower}_{versionLower}.json"
+
 renderers:
   flate:
     enabled: true

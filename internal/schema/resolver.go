@@ -5,6 +5,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/goccy/go-yaml/ast"
 	"github.com/home-operations/yamlls/internal/config"
 )
 
@@ -84,4 +85,27 @@ func matchSettings(schemas map[string][]string, docPath string) string {
 
 func startsAnchored(g string) bool {
 	return len(g) > 0 && (g[0] == '/' || (len(g) >= 2 && g[0] == '*' && g[1] == '*'))
+}
+
+// K8sURLForNode runs apiVersion+kind detection on the given document body
+// and renders the configured kubernetes.schemaUrl template (yannh default).
+// Returns "" when the document isn't a Kubernetes manifest.
+func (r *Resolver) K8sURLForNode(body ast.Node) string {
+	gvk, ok := DetectGVK(body)
+	if !ok {
+		return ""
+	}
+	return r.K8sURL(gvk)
+}
+
+// K8sURL renders the configured URL template for an already-parsed GVK.
+// Used by the renderer pipeline where the GVK is known up-front.
+func (r *Resolver) K8sURL(gvk GVK) string {
+	r.mu.RLock()
+	tmpl := ""
+	if r.settings.Kubernetes != nil {
+		tmpl = r.settings.Kubernetes.SchemaURL
+	}
+	r.mu.RUnlock()
+	return BuildK8sURL(tmpl, gvk.Group, gvk.Version, gvk.Kind)
 }

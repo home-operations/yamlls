@@ -15,7 +15,7 @@ import (
 // renderDiagnostics emits file-level diagnostics for a rendered output:
 // rendered manifests have no source line, so we embed the rendered
 // location (kind/name @ jsonptr) in the message instead.
-func renderDiagnostics(store *schema.Store, out *render.RenderedOutput, err error) []protocol.Diagnostic {
+func renderDiagnostics(store *schema.Store, resolver *schema.Resolver, out *render.RenderedOutput, err error) []protocol.Diagnostic {
 	if err != nil {
 		return []protocol.Diagnostic{{
 			Severity: ptr(protocol.DiagnosticSeverityError),
@@ -29,17 +29,15 @@ func renderDiagnostics(store *schema.Store, out *render.RenderedOutput, err erro
 	}
 	var diags []protocol.Diagnostic
 	for _, m := range out.Manifests {
-		url := schema.KubernetesSchemaURL(m.GVK.Group, m.GVK.Version, m.GVK.Kind)
+		url := resolver.K8sURL(schema.GVK{Group: m.GVK.Group, Version: m.GVK.Version, Kind: m.GVK.Kind})
 		if url == "" {
 			continue
 		}
 		sch, err := store.Get(url, "")
 		if err != nil {
-			diags = append(diags, protocol.Diagnostic{
-				Severity: ptr(protocol.DiagnosticSeverityWarning),
-				Source:   ptr(renderSource(out)),
-				Message:  fmt.Sprintf("[rendered %s/%s] could not load Kubernetes schema: %v", m.GVK.Kind, m.Name, err),
-			})
+			// Schema isn't online (common for CRDs missing from the
+			// configured mirror). Skip silently — the negative cache in
+			// the Store stops the network spam.
 			continue
 		}
 		value, err := yamlast.Decode(m.AST)

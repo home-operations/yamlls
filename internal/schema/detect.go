@@ -6,9 +6,39 @@ import (
 	"github.com/goccy/go-yaml/parser"
 )
 
-// DetectKubernetesGVK reads the first YAML document's apiVersion+kind and
-// returns the matching yannh/kubernetes-json-schema URL, or "" when the
-// document is not a Kubernetes manifest. Parse failures yield "".
+// GVK identifies a Kubernetes type extracted from a YAML document.
+type GVK struct {
+	Group   string
+	Version string
+	Kind    string
+}
+
+// DetectGVK extracts apiVersion+kind from a YAML document body. Returns
+// !ok when the document isn't a recognizable Kubernetes manifest.
+func DetectGVK(body ast.Node) (GVK, bool) {
+	if body == nil {
+		return GVK{}, false
+	}
+	var head struct {
+		APIVersion string `yaml:"apiVersion"`
+		Kind       string `yaml:"kind"`
+	}
+	if err := yaml.NodeToValue(body, &head); err != nil {
+		return GVK{}, false
+	}
+	if head.APIVersion == "" || head.Kind == "" {
+		return GVK{}, false
+	}
+	group, version := splitOnce(head.APIVersion, '/')
+	if version == "" {
+		version = group
+		group = ""
+	}
+	return GVK{Group: group, Version: version, Kind: head.Kind}, true
+}
+
+// DetectKubernetesGVK reads the first YAML document's apiVersion+kind
+// and returns the matching yannh/kubernetes-json-schema URL.
 func DetectKubernetesGVK(text string) string {
 	f, err := parser.ParseBytes([]byte(text), 0)
 	if err != nil || f == nil || len(f.Docs) == 0 {
@@ -17,28 +47,13 @@ func DetectKubernetesGVK(text string) string {
 	return DetectKubernetesGVKFromNode(f.Docs[0].Body)
 }
 
-// DetectKubernetesGVKFromNode is the per-document variant used when a
-// multi-doc file may mix kinds (e.g., a Namespace alongside a Deployment).
+// DetectKubernetesGVKFromNode is the per-document variant.
 func DetectKubernetesGVKFromNode(body ast.Node) string {
-	if body == nil {
+	gvk, ok := DetectGVK(body)
+	if !ok {
 		return ""
 	}
-	var head struct {
-		APIVersion string `yaml:"apiVersion"`
-		Kind       string `yaml:"kind"`
-	}
-	if err := yaml.NodeToValue(body, &head); err != nil {
-		return ""
-	}
-	if head.APIVersion == "" || head.Kind == "" {
-		return ""
-	}
-	group, version := splitOnce(head.APIVersion, '/')
-	if version == "" {
-		version = group
-		group = ""
-	}
-	return KubernetesSchemaURL(group, version, head.Kind)
+	return KubernetesSchemaURL(gvk.Group, gvk.Version, gvk.Kind)
 }
 
 func splitOnce(s string, sep byte) (string, string) {
