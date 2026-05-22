@@ -8,8 +8,11 @@ import (
 	"github.com/home-operations/yamlls/internal/config"
 )
 
-// Resolver picks the schema URL for a document. Order: modeline,
-// workspace settings, Kubernetes apiVersion+kind, JSON Schema Store catalog.
+// Resolver picks the FILE-LEVEL schema URL for a document. Order:
+// modeline, workspace settings glob, JSON Schema Store catalog.
+// Kubernetes apiVersion+kind auto-detection is per-document and lives
+// in DetectKubernetesGVKFromNode — callers handle that themselves so
+// multi-doc files with mixed kinds resolve correctly.
 type Resolver struct {
 	mu       sync.RWMutex
 	settings config.Settings
@@ -49,9 +52,6 @@ func (r *Resolver) Resolve(text, docPath string) string {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	if ref := matchSettings(r.settings.Schemas, docPath); ref != "" {
-		return ref
-	}
-	if ref := DetectKubernetesGVK(text); ref != "" {
 		return ref
 	}
 	if r.catalog != nil {

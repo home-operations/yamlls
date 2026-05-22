@@ -219,15 +219,33 @@ func (s *Server) captureNotify(ctx *glsp.Context) {
 func (s *Server) publishWith(notify glsp.NotifyFunc, d *document.Document) {
 	parsed := yamlast.Parse([]byte(d.Text))
 	path := uriToPath(d.URI)
-	ref := s.resolver.Resolve(d.Text, path)
+	fileRef := s.resolver.Resolve(d.Text, path)
+
 	var diags []protocol.Diagnostic
-	if ref == "" {
-		diags = diagnostics.Validate(parsed, nil)
-	} else if sch, err := s.schemas.Get(ref, path); err == nil {
-		diags = diagnostics.Validate(parsed, sch)
-	} else {
-		diags = append(diags, schemaLoadDiag(err))
+	if parsed.Err != nil {
+		diags = append(diags, diagnostics.ParseErrorDiagnostic(parsed.Err))
 	}
+
+	loadFailures := make(map[string]bool)
+	for _, doc := range parsed.Docs() {
+		ref := fileRef
+		if ref == "" {
+			ref = schema.DetectKubernetesGVKFromNode(doc.Body)
+		}
+		if ref == "" {
+			continue
+		}
+		sch, err := s.schemas.Get(ref, path)
+		if err != nil {
+			if !loadFailures[ref] {
+				loadFailures[ref] = true
+				diags = append(diags, schemaLoadDiag(err))
+			}
+			continue
+		}
+		diags = append(diags, diagnostics.ValidateDoc(doc, sch)...)
+	}
+
 	diags = append(diags, s.renderedDiagnosticsFor(d.URI)...)
 	v := protocol.UInteger(d.Version)
 	notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{

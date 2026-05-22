@@ -29,6 +29,22 @@ func Validate(parsed *yamlast.Parsed, sch *jsonschema.Schema) []protocol.Diagnos
 	return out
 }
 
+// ValidateDoc runs schema validation against a single YAML document.
+// Returns nil when sch is nil or the doc validates cleanly.
+func ValidateDoc(doc *ast.DocumentNode, sch *jsonschema.Schema) []protocol.Diagnostic {
+	if sch == nil {
+		return nil
+	}
+	return validateDoc(doc, sch)
+}
+
+// ParseErrorDiagnostic produces the file-level diagnostic for a YAML
+// parse failure. Exposed so the LSP layer can surface it once per file
+// rather than once per doc.
+func ParseErrorDiagnostic(err error) protocol.Diagnostic {
+	return parseErrorDiag(err)
+}
+
 func validateDoc(doc *ast.DocumentNode, sch *jsonschema.Schema) []protocol.Diagnostic {
 	value, err := yamlast.Decode(doc)
 	if err != nil {

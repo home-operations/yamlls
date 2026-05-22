@@ -2,6 +2,7 @@ package schema
 
 import (
 	yaml "github.com/goccy/go-yaml"
+	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/parser"
 )
 
@@ -13,15 +14,20 @@ func DetectKubernetesGVK(text string) string {
 	if err != nil || f == nil || len(f.Docs) == 0 {
 		return ""
 	}
-	doc := f.Docs[0]
-	if doc.Body == nil {
+	return DetectKubernetesGVKFromNode(f.Docs[0].Body)
+}
+
+// DetectKubernetesGVKFromNode is the per-document variant used when a
+// multi-doc file may mix kinds (e.g., a Namespace alongside a Deployment).
+func DetectKubernetesGVKFromNode(body ast.Node) string {
+	if body == nil {
 		return ""
 	}
 	var head struct {
 		APIVersion string `yaml:"apiVersion"`
 		Kind       string `yaml:"kind"`
 	}
-	if err := yaml.NodeToValue(doc.Body, &head); err != nil {
+	if err := yaml.NodeToValue(body, &head); err != nil {
 		return ""
 	}
 	if head.APIVersion == "" || head.Kind == "" {

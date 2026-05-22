@@ -9,6 +9,8 @@ import (
 	"github.com/home-operations/yamlls/internal/document"
 	"github.com/home-operations/yamlls/internal/hover"
 	"github.com/home-operations/yamlls/internal/render"
+	"github.com/home-operations/yamlls/internal/schema"
+	"github.com/home-operations/yamlls/internal/yamlast"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
@@ -39,16 +41,28 @@ func (s *Server) didClose(ctx *glsp.Context, params *protocol.DidCloseTextDocume
 	return nil
 }
 
-func (s *Server) schemaFor(uri string) *jsonschema.Schema {
+// schemaAtCursor resolves the schema that applies to the document the
+// cursor is inside. For multi-doc files this may differ per doc (e.g. a
+// Namespace and a Deployment in the same file resolve to different
+// Kubernetes schemas).
+func (s *Server) schemaAtCursor(uri string, pos protocol.Position) *jsonschema.Schema {
 	d, ok := s.docs.Get(uri)
 	if !ok {
 		return nil
 	}
-	ref := s.resolver.Resolve(d.Text, uriToPath(d.URI))
+	path := uriToPath(d.URI)
+	ref := s.resolver.Resolve(d.Text, path)
+	if ref == "" {
+		parsed := yamlast.ParseForCursor(d.Text, int(pos.Line))
+		cur := yamlast.LocateCursor(parsed, d.Text, pos)
+		if cur.Doc != nil {
+			ref = schema.DetectKubernetesGVKFromNode(cur.Doc.Body)
+		}
+	}
 	if ref == "" {
 		return nil
 	}
-	sch, err := s.schemas.Get(ref, uriToPath(d.URI))
+	sch, err := s.schemas.Get(ref, path)
 	if err != nil {
 		return nil
 	}
@@ -60,7 +74,7 @@ func (s *Server) hover(ctx *glsp.Context, params *protocol.HoverParams) (*protoc
 	if !ok {
 		return nil, nil
 	}
-	sch := s.schemaFor(params.TextDocument.URI)
+	sch := s.schemaAtCursor(params.TextDocument.URI, params.Position)
 	if sch == nil {
 		return nil, nil
 	}
@@ -72,7 +86,7 @@ func (s *Server) completion(ctx *glsp.Context, params *protocol.CompletionParams
 	if !ok {
 		return nil, nil
 	}
-	sch := s.schemaFor(params.TextDocument.URI)
+	sch := s.schemaAtCursor(params.TextDocument.URI, params.Position)
 	if sch == nil {
 		return nil, nil
 	}
