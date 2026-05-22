@@ -1,0 +1,63 @@
+---
+version: "2"
+run:
+  allow-parallel-runners: true
+linters:
+  default: none
+  enable:
+    - copyloopvar
+    - dupl
+    - errcheck
+    - goconst
+    - gocyclo
+    - govet
+    - ineffassign
+    - lll
+    - misspell
+    - nakedret
+    - prealloc
+    - revive
+    - staticcheck
+    - unconvert
+    - unparam
+    - unused
+  settings:
+    revive:
+      rules:
+        - name: comment-spacings
+        - name: import-shadowing
+  exclusions:
+    generated: lax
+    rules:
+      # Test files often duplicate fixture setup, hand-roll scaffolding
+      # whose return values are unused, and repeat literal strings.
+      - linters:
+          - dupl
+          - goconst
+          - lll
+          - unparam
+        path: _test\.go
+      - linters:
+          - dupl
+          - goconst
+          - lll
+          - unparam
+        path: ^test/
+      # Long lines in handlers.go come from LSP type names we can't shorten.
+      - linters:
+          - lll
+        path: internal/lsp/
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

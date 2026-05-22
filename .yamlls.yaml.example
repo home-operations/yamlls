@@ -1,0 +1,15 @@
+# Drop this file (renamed to `.yamlls.yaml`) at the root of your repo.
+
+schemas:
+  "https://json.schemastore.org/github-workflow.json":
+    - ".github/workflows/*.yml"
+  "./schemas/local.json":
+    - "k8s/**/*.yaml"
+
+catalog: true
+catalogUrl: ""
+
+renderers:
+  flate:
+    enabled: true
+    binary: flate
