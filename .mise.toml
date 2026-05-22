@@ -1,0 +1,53 @@
+[tools]
+go = "1.26.3"
+golangci-lint = "2.12.2"
+lefthook = "2.1.8"
+yamlfmt = "0.21.0"
+zizmor = "1.25.2"
+
+[tasks.fmt]
+description = "Run go fmt against code"
+run = "go fmt ./..."
+
+[tasks.vet]
+description = "Run go vet against code"
+run = "go vet ./..."
+
+[tasks.lint]
+description = "Run golangci-lint"
+run = "golangci-lint run"
+
+[tasks.lint-fix]
+description = "Run golangci-lint with --fix"
+run = "golangci-lint run --fix"
+
+[tasks.yamlfmt]
+description = "Format YAML files in the repo"
+run = "yamlfmt ."
+
+[tasks.test]
+description = "Run unit + integration tests"
+depends = ["fmt", "vet"]
+run = "go test ./... -coverprofile cover.out"
+
+[tasks.build]
+description = "Build yamlls binary"
+depends = ["fmt", "vet"]
+run = '''
+version="${VERSION:-$(git describe --tags --always 2>/dev/null || echo dev)}"
+commit="$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+mkdir -p bin
+go build -ldflags "-X main.version=$version -X main.commit=$commit" -o bin/yamlls ./cmd/yamlls
+'''
+
+[tasks.run]
+description = "Run yamlls from source (rare — LSP clients spawn the binary)"
+depends = ["fmt", "vet"]
+run = "go run ./cmd/yamlls"
+
+[tasks.zizmor]
+description = "Audit GitHub Actions workflows"
+run = "zizmor .github/workflows"
+
+[hooks]
+postinstall = "lefthook install"
