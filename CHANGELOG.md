@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.0.2](https://github.com/home-operations/yamlls/compare/0.0.1...0.0.2) (2026-05-22)
+
+
+### Features
+
+* homebrew tap via goreleaser homebrew_casks ([84b4c46](https://github.com/home-operations/yamlls/commit/84b4c46b7b6b4844e35b6763697e9a34bea2dbb7))
+* **lsp:** code actions, code lenses, render diff, .yamlls.yaml self-validate ([77e1aef](https://github.com/home-operations/yamlls/commit/77e1aef26f8547fb090a94381ad85c6d3ad8da4a))
+* **lsp:** foldingRange, documentLink, documentSymbol, workspaceFolders ([f7223f6](https://github.com/home-operations/yamlls/commit/f7223f68991f820cdcf056d424eedd2b388c1022))
+
+
+### Miscellaneous Chores
+
+* strip explanatory cruft from comments and docs ([83105a7](https://github.com/home-operations/yamlls/commit/83105a73190b7db16a4758f0c73a20c2e3a13e22))
+* strip explanatory cruft from the new lsp features ([a0e4d28](https://github.com/home-operations/yamlls/commit/a0e4d28627351439772cb8b825bf460a5533f84b))
+
 ## 0.0.1 (2026-05-22)
 
 
