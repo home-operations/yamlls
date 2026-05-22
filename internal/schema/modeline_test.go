@@ -33,6 +33,11 @@ func TestFindModelineSchema(t *testing.T) {
 			in:   "# yaml-language-server: $schema=./foo.json someOther=value\n",
 			want: "./foo.json",
 		},
+		{
+			name: "modeline after doc separator",
+			in:   "---\n# yaml-language-server: $schema=./sep.json\nname: x\n",
+			want: "./sep.json",
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

@@ -15,7 +15,7 @@ func FindModelineSchema(text string) string {
 	sc := bufio.NewScanner(strings.NewReader(text))
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
-		if line == "" {
+		if line == "" || line == "---" {
 			continue
 		}
 		if !strings.HasPrefix(line, "#") {
