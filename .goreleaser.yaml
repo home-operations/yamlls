@@ -42,7 +42,7 @@ archives:
     files:
       - LICENSE
       - README.md
-      - docs/**/*
+      - docs/**
 
 checksum:
   name_template: "checksums.txt"
@@ -51,4 +51,24 @@ snapshot:
   version_template: "{{ incpatch .Version }}-next"
 
 changelog:
-  disable: true  # release-please owns the CHANGELOG
+  disable: true # release-please owns the CHANGELOG
+
+homebrew_casks:
+  - name: yamlls
+    repository:
+      owner: home-operations
+      name: homebrew-tap
+      branch: main
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    homepage: https://github.com/home-operations/yamlls
+    description: YAML language server with pluggable rendering for Flux sources.
+    license: AGPL-3.0
+    binaries:
+      - yamlls
+    hooks:
+      post:
+        install: |-
+          if OS.mac?
+            system_command "/usr/bin/xattr",
+              args: ["-dr", "com.apple.quarantine", "#{staged_path}/yamlls"]
+          end

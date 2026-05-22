@@ -18,9 +18,20 @@ override in `.yamlls.yaml` to point elsewhere. 404s are silently skipped.
 
 ## Install
 
+Homebrew:
+
+```sh
+brew install home-operations/tap/yamlls
+```
+
+Go:
+
 ```sh
 go install github.com/home-operations/yamlls/cmd/yamlls@latest
 ```
+
+Prebuilt binaries for linux/darwin/windows (amd64+arm64) are attached to
+each [GitHub release](https://github.com/home-operations/yamlls/releases).
 
 For Flux rendering:
 
