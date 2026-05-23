@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.0.3](https://github.com/home-operations/yamlls/compare/0.0.2...0.0.3) (2026-05-23)
+
+
+### Bug Fixes
+
+* analyze correctly when files has multiple schema ([6f458a2](https://github.com/home-operations/yamlls/commit/6f458a2b36140481ab60ba2768f8c03e5454ba45))
+
+
+### Miscellaneous Chores
+
+* refactor Homebrew cask configuration in goreleaser ([dea67bf](https://github.com/home-operations/yamlls/commit/dea67bfe004c6eced22dd0ccf2550e5b682f8647))
+
 ## [0.0.2](https://github.com/home-operations/yamlls/compare/0.0.1...0.0.2) (2026-05-22)
 
 
