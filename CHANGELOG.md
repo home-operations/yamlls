@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.4](https://github.com/home-operations/yamlls/compare/0.0.3...0.0.4) (2026-05-24)
+
+
+### Miscellaneous Chores
+
+* yoink flate release setup ([670f23c](https://github.com/home-operations/yamlls/commit/670f23ca6cde2298e1f6f4f922a703befeef224f))
+
 ## [0.0.3](https://github.com/home-operations/yamlls/compare/0.0.2...0.0.3) (2026-05-23)
 
 
