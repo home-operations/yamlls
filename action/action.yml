@@ -1,0 +1,126 @@
+---
+# yaml-language-server: $schema=https://json.schemastore.org/github-action.json
+name: Setup yamlls CLI
+description: A GitHub Action for installing the yamlls CLI
+author: home-operations
+branding:
+  color: purple
+  icon: file-text
+
+inputs:
+  version:
+    description: yamlls version (e.g. 0.0.2), defaults to the latest release
+    required: false
+  bindir:
+    description: Alternative location for the yamlls binary, defaults to a path under $RUNNER_TOOL_CACHE
+    required: false
+  token:
+    description: Token used to authenticate against the GitHub.com API
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - name: Download yamlls
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        YAMLLS_TOOL_DIR: ${{ inputs.bindir }}
+        TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+
+        if [[ -z "${VERSION}" || "${VERSION}" == "latest" ]]; then
+          if [[ -n "${TOKEN}" ]]; then
+            VERSION=$(curl -fsSL -H "Authorization: token ${TOKEN}" \
+              https://api.github.com/repos/home-operations/yamlls/releases/latest \
+              | grep tag_name | cut -d '"' -f 4)
+          else
+            VERSION=$(curl -w '%{url_effective}\n' -IsSL \
+              https://github.com/home-operations/yamlls/releases/latest \
+              -o /dev/null | sed 's|^.*/||')
+          fi
+        fi
+        if [[ -z "${VERSION}" ]]; then
+          echo "Unable to determine yamlls version"
+          exit 1
+        fi
+        VERSION="${VERSION#v}"
+
+        OS=$(echo "${RUNNER_OS}" | tr '[:upper:]' '[:lower:]')
+        if [[ "${OS}" == "macos" ]]; then
+          OS="darwin"
+        fi
+
+        ARCH=$(echo "${RUNNER_ARCH}" | tr '[:upper:]' '[:lower:]')
+        if [[ "${ARCH}" == "x64" ]]; then
+          ARCH="amd64"
+        fi
+
+        EXEC="yamlls"
+        ARCHIVE="yamlls_${VERSION}_${OS}_${ARCH}.tar.gz"
+        if [[ "${OS}" == "windows" ]]; then
+          EXEC="yamlls.exe"
+          ARCHIVE="yamlls_${VERSION}_${OS}_${ARCH}.zip"
+        fi
+
+        if [[ -z "${YAMLLS_TOOL_DIR}" ]]; then
+          YAMLLS_TOOL_DIR="${RUNNER_TOOL_CACHE}/yamlls/${VERSION}/${OS}/${ARCH}"
+        fi
+
+        if [[ ! -x "${YAMLLS_TOOL_DIR}/${EXEC}" ]]; then
+          DL_DIR="$(mktemp -dt yamlls-XXXXXX)"
+          trap 'rm -rf "${DL_DIR}"' EXIT
+
+          BASE_URL="https://github.com/home-operations/yamlls/releases/download/${VERSION}"
+
+          max_retries=5
+          retry_delay=5
+          download() {
+            local url=$1 dest=$2 attempt
+            for attempt in $(seq 1 ${max_retries}); do
+              echo "Downloading ${url} (attempt ${attempt}/${max_retries})"
+              if curl -fsSL -o "${dest}" "${url}"; then
+                return 0
+              fi
+              if [[ ${attempt} -lt ${max_retries} ]]; then
+                sleep ${retry_delay}
+              fi
+            done
+            echo "Failed to download ${url} after ${max_retries} attempts"
+            return 1
+          }
+
+          download "${BASE_URL}/${ARCHIVE}" "${DL_DIR}/${ARCHIVE}"
+          download "${BASE_URL}/${ARCHIVE}.sha256" "${DL_DIR}/${ARCHIVE}.sha256"
+
+          echo "Verifying checksum"
+          if command -v sha256sum > /dev/null; then
+            sum=$(sha256sum "${DL_DIR}/${ARCHIVE}" | awk '{print $1}')
+          elif command -v openssl > /dev/null; then
+            sum=$(openssl sha256 "${DL_DIR}/${ARCHIVE}" | awk '{print $2}')
+          else
+            echo "Neither sha256sum nor openssl found"
+            exit 1
+          fi
+          expected=$(awk '{print $1}' "${DL_DIR}/${ARCHIVE}.sha256")
+          if [[ "${sum}" != "${expected}" ]]; then
+            echo "Checksum mismatch for ${ARCHIVE}: got ${sum}, expected ${expected}"
+            exit 1
+          fi
+
+          echo "Installing yamlls to ${YAMLLS_TOOL_DIR}"
+          mkdir -p "${YAMLLS_TOOL_DIR}"
+          if [[ "${OS}" == "windows" ]]; then
+            unzip -q "${DL_DIR}/${ARCHIVE}" "${EXEC}" -d "${YAMLLS_TOOL_DIR}"
+          else
+            tar xzf "${DL_DIR}/${ARCHIVE}" -C "${YAMLLS_TOOL_DIR}" "${EXEC}"
+          fi
+          chmod +x "${YAMLLS_TOOL_DIR}/${EXEC}"
+        fi
+
+        echo "${YAMLLS_TOOL_DIR}" >> "${GITHUB_PATH}"
+
+    - name: Print yamlls version
+      shell: bash
+      run: yamlls --version

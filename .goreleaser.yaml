@@ -1,7 +1,6 @@
 ---
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
 version: 2
-
 project_name: yamlls
 
 before:
@@ -10,8 +9,6 @@ before:
 
 builds:
   - id: yamlls
-    main: ./cmd/yamlls
-    binary: yamlls
     env:
       - CGO_ENABLED=0
     flags:
@@ -20,38 +17,50 @@ builds:
       - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}}
     goos:
       - linux
-      - darwin
       - windows
+      - darwin
     goarch:
       - amd64
       - arm64
     ignore:
       - goos: windows
         goarch: arm64
+    main: ./cmd/yamlls/main.go
+    binary: yamlls
 
 archives:
   - id: yamlls
-    name_template: >-
-      {{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}
-    formats:
-      - tar.gz
+    ids:
+      - yamlls
     format_overrides:
       - goos: windows
         formats:
           - zip
-    files:
-      - LICENSE
-      - README.md
-      - docs/**
+
+upx:
+  - enabled: true
+    compress: best
+    lzma: true
 
 checksum:
-  name_template: "checksums.txt"
+  algorithm: sha256
+  split: true
 
-snapshot:
-  version_template: "{{ incpatch .Version }}-next"
+sboms:
+  - artifacts: archive
+    documents:
+      - "{{ .ArtifactName }}.sbom.json"
 
-changelog:
-  disable: true # release-please owns the CHANGELOG
+signs:
+  - cmd: cosign
+    signature: ${artifact}.sigstore.json
+    args:
+      - sign-blob
+      - --bundle=${signature}
+      - --yes
+      - ${artifact}
+    artifacts: all
+    output: true
 
 homebrew_casks:
   - name: yamlls
@@ -72,3 +81,8 @@ homebrew_casks:
       post:
         install: |
           system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/yamlls"] if OS.mac?
+
+# release-please creates the GitHub Release with the changelog; goreleaser
+# attaches binaries/sboms/sigs to it.
+release:
+  mode: keep-existing
