@@ -57,10 +57,11 @@ func New(version string, registry *render.Registry) *Server {
 	}
 	s.pipeline = render.NewPipeline(registry, s)
 	s.handler = &protocol.Handler{
-		Initialize:  s.initialize,
-		Initialized: s.initialized,
-		Shutdown:    s.shutdown,
-		SetTrace:    s.setTrace,
+		Initialize:    s.initialize,
+		Initialized:   s.initialized,
+		Shutdown:      s.shutdown,
+		SetTrace:      s.setTrace,
+		CancelRequest: s.cancelRequest,
 
 		TextDocumentDidOpen:   s.didOpen,
 		TextDocumentDidChange: s.didChange,
@@ -196,6 +197,10 @@ func (s *Server) shutdown(ctx *glsp.Context) error {
 
 func (s *Server) setTrace(ctx *glsp.Context, params *protocol.SetTraceParams) error {
 	protocol.SetTraceValue(params.Value)
+	return nil
+}
+
+func (s *Server) cancelRequest(ctx *glsp.Context, params *protocol.CancelParams) error {
 	return nil
 }
 
