@@ -24,8 +24,8 @@ override in `.yamlls.yaml` to point elsewhere. 404s are silently skipped.
 | Diagnostics, completion, hover                 | yes                                          | yes                                                          |
 | Symbols, folding, links, code actions          | yes                                          | yes                                                          |
 | Code lens                                      | rendered output, diff                        | none                                                         |
-| Per-doc schema in multi-doc files              | per `---` block                              | file-level only ([#80][rh-80])                               |
-| Kubernetes auto-detect                         | per-doc, URL template from apiVersion+kind   | `yaml.kubernetesCRDStore` ([datreeio/CRDs-catalog][datree])  |
+| Per-doc schema in multi-doc files              | dynamic, per `---` block from apiVersion+kind | pre-declared ordered list via `schemaSequence`              |
+| Kubernetes auto-detect                         | URL template from apiVersion+kind            | `yaml.kubernetesCRDStore` ([datreeio/CRDs-catalog][datree])  |
 | Workspace config file                          | `.yamlls.yaml`                               | editor settings only                                         |
 | Flux `HelmRelease` / `Kustomization` rendering | via [flate][flate]                           | no                                                           |
 | Formatting                                     | no                                           | yes (Prettier)                                               |
@@ -33,7 +33,6 @@ override in `.yamlls.yaml` to point elsewhere. 404s are silently skipped.
 | Diagnostic suppression comments                | no                                           | yes                                                          |
 | JSON Schema drafts                             | 04, 06, 07, 2019-09, 2020-12                 | 04, 07, 2019-09, 2020-12                                     |
 
-[rh-80]: https://github.com/redhat-developer/yaml-language-server/issues/80
 [datree]: https://github.com/datreeio/CRDs-catalog
 
 ## Install
