@@ -34,9 +34,9 @@ func BuildK8sURL(template, group, version, kind string) string {
 		"{groupSeg}", groupSeg,
 		"{groupFirst}", groupFirst,
 		"{groupFirstSeg}", groupFirstSeg,
-		"{kind}", kind,
+		"{kind}", strings.ToLower(kind),
 		"{kindLower}", strings.ToLower(kind),
-		"{version}", version,
+		"{version}", strings.ToLower(version),
 		"{versionLower}", strings.ToLower(version),
 	)
 	return r.Replace(template)

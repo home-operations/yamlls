@@ -49,6 +49,15 @@ func TestBuildK8sURL_EmptyWhenMissingFields(t *testing.T) {
 	}
 }
 
+func TestBuildK8sURL_KindAndVersionLowercased(t *testing.T) {
+	// The documented contract is {kind} == {kindLower} and {version} ==
+	// {versionLower}; both must be lowercased.
+	got := BuildK8sURL("{kind}_{version}", "apps", "V1Beta1", "Deployment")
+	if got != "deployment_v1beta1" {
+		t.Errorf("got %q, want deployment_v1beta1", got)
+	}
+}
+
 func TestBuildK8sURL_AllPlaceholdersResolve(t *testing.T) {
 	tmpl := "{group}|{groupSeg}|{groupFirst}|{groupFirstSeg}|{kind}|{kindLower}|{version}|{versionLower}"
 	got := BuildK8sURL(tmpl, "apps.k8s.io", "v1beta1", "Deployment")
