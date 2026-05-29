@@ -62,6 +62,18 @@ func effectiveCatalogURL(s config.Settings) string {
 	return DefaultCatalogURL
 }
 
+// WaitForCatalog blocks until the background catalog load has finished, or
+// returns immediately if the catalog is disabled. One-shot callers use this
+// so filename-based matches resolve on the first pass.
+func (r *Resolver) WaitForCatalog() {
+	r.mu.RLock()
+	catalog := r.catalog
+	r.mu.RUnlock()
+	if catalog != nil {
+		catalog.Wait()
+	}
+}
+
 func (r *Resolver) Resolve(text, docPath string) string {
 	if ref := FindModelineSchema(text); ref != "" {
 		return ref

@@ -6,7 +6,6 @@ import (
 	"github.com/home-operations/yamlls/internal/actions"
 	"github.com/home-operations/yamlls/internal/completion"
 	"github.com/home-operations/yamlls/internal/config"
-	"github.com/home-operations/yamlls/internal/diagnostics"
 	"github.com/home-operations/yamlls/internal/document"
 	"github.com/home-operations/yamlls/internal/folding"
 	"github.com/home-operations/yamlls/internal/hover"
@@ -252,15 +251,4 @@ func (s *Server) clearDiagnostics(ctx *glsp.Context, uri string) {
 
 func uriToPath(docURI string) string {
 	return fileuri.ToPath(docURI)
-}
-
-func schemaLoadDiag(err error) protocol.Diagnostic {
-	sev := protocol.DiagnosticSeverityWarning
-	src := diagnostics.Source
-	return protocol.Diagnostic{
-		Severity: &sev,
-		Source:   &src,
-		Message:  "schema load failed: " + err.Error(),
-		Range:    protocol.Range{},
-	}
 }

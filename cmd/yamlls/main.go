@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/home-operations/yamlls/internal/lint"
 	"github.com/home-operations/yamlls/internal/lsp"
 	"github.com/home-operations/yamlls/internal/render"
 	"github.com/home-operations/yamlls/internal/render/flate"
@@ -19,6 +20,15 @@ var (
 )
 
 func main() {
+	// Subcommands run one-shot and exit; absent one, the binary is the
+	// stdio language server.
+	if len(os.Args) > 1 {
+		switch os.Args[1] {
+		case "validate", "lint":
+			os.Exit(lint.Run(os.Args[2:], os.Stdout, os.Stderr))
+		}
+	}
+
 	var (
 		showVersion bool
 		logFile     string

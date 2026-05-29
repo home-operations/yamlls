@@ -28,6 +28,7 @@ type Catalog struct {
 
 	once    sync.Once
 	loaded  atomic.Bool
+	done    chan struct{}
 	loadErr error
 	entries []catalogEntry
 }
@@ -39,7 +40,15 @@ func NewCatalog(url string) *Catalog {
 	return &Catalog{
 		URL:    url,
 		Client: &http.Client{Timeout: 10 * time.Second},
+		done:   make(chan struct{}),
 	}
+}
+
+// Wait blocks until the catalog's background Load has finished (or returns
+// immediately if it already has). Used by one-shot callers like the
+// validate command that cannot rely on a later request re-resolving.
+func (c *Catalog) Wait() {
+	<-c.done
 }
 
 // Load fetches the catalog once, in the background, so no LSP request
@@ -49,6 +58,7 @@ func (c *Catalog) Load(onLoaded func()) {
 	go c.once.Do(func() {
 		c.load()
 		c.loaded.Store(true)
+		close(c.done)
 		if onLoaded != nil {
 			onLoaded()
 		}

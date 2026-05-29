@@ -7,9 +7,9 @@ import (
 	"github.com/home-operations/yamlls/internal/config"
 	"github.com/home-operations/yamlls/internal/diagnostics"
 	"github.com/home-operations/yamlls/internal/document"
+	"github.com/home-operations/yamlls/internal/lint"
 	"github.com/home-operations/yamlls/internal/render"
 	"github.com/home-operations/yamlls/internal/schema"
-	"github.com/home-operations/yamlls/internal/yamlast"
 	"github.com/tliron/glsp"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
@@ -282,42 +282,8 @@ func (s *Server) captureNotify(ctx *glsp.Context) {
 }
 
 func (s *Server) publishWith(notify glsp.NotifyFunc, d *document.Document) {
-	parsed := yamlast.Parse([]byte(d.Text))
-	path := uriToPath(d.URI)
-	fileRef := s.resolver.Resolve(d.Text, path)
-
 	// nil marshals to `null`; clients keep stale diagnostics on `null`.
-	diags := []protocol.Diagnostic{}
-	if parsed.Err != nil {
-		diags = append(diags, diagnostics.ParseErrorDiagnostic(parsed.Err))
-	}
-
-	// Surface load failures only for file-level refs; per-doc auto-detect
-	// would warn on every CRD missing from the configured mirror.
-	loadFailures := make(map[string]bool)
-	for _, doc := range parsed.Docs() {
-		ref := schema.FindModelineSchemaForDoc(doc)
-		if ref == "" {
-			ref = fileRef
-		}
-		userIntent := ref != ""
-		if ref == "" {
-			ref = s.resolver.K8sURLForNode(doc.Body)
-		}
-		if ref == "" {
-			continue
-		}
-		sch, err := s.schemas.Get(ref, path)
-		if err != nil {
-			if userIntent && !loadFailures[ref] {
-				loadFailures[ref] = true
-				diags = append(diags, schemaLoadDiag(err))
-			}
-			continue
-		}
-		diags = append(diags, diagnostics.ValidateDoc(doc, sch, d.Text)...)
-	}
-
+	diags := lint.Document(d.Text, uriToPath(d.URI), s.resolver, s.schemas)
 	diags = append(diags, s.renderedDiagnosticsFor(d.URI)...)
 	diags = diagnostics.ParseSuppressions(d.Text).Filter(diags)
 	v := protocol.UInteger(d.Version)

@@ -241,6 +241,24 @@ yamlls --log-file PATH        append logs to PATH instead of stderr
 yamlls -v N                   log verbosity (0=silent, 1=info, 2+=debug)
 ```
 
+## Validate (one-shot, for CI)
+
+`yamlls validate` (alias `lint`) checks files without an editor, resolving
+schemas the same way the server does (modeline, `.yamlls.yaml` globs,
+catalog, Kubernetes auto-detect) and honouring `# yamlls-disable…`
+comments. Directory arguments are walked for `*.yaml`/`*.yml`.
+
+```sh
+yamlls validate deploy.yaml            # one file
+yamlls validate k8s/                   # walk a directory
+yamlls validate --root . manifests/    # pin the workspace root for .yamlls.yaml
+```
+
+Diagnostics print as `path:line:col: severity: message`. The exit code is
+`1` when any error-severity diagnostic is reported, `2` on a usage or I/O
+error, `0` otherwise. The workspace root is auto-detected (nearest
+`.yamlls.yaml` or `.git`) unless `--root` is given.
+
 ## Development
 
 ```sh
