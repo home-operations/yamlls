@@ -96,15 +96,22 @@ func pathToPointer(yp string) string {
 func offsetOf(text string, pos protocol.Position) int {
 	line, col := uint32(0), uint32(0)
 	for i, r := range text {
-		if line == pos.Line && col == pos.Character {
-			return i
+		if line == pos.Line {
+			if col >= pos.Character {
+				return i
+			}
+			if r == '\n' {
+				return i // column past end of line: clamp to line end
+			}
 		}
 		if r == '\n' {
 			line++
 			col = 0
 			continue
 		}
-		col++
+		// pos.Character is a UTF-16 code-unit count; advance by the rune's
+		// UTF-16 width so cursors after non-BMP runes map to the right node.
+		col += utf16RuneLen(r)
 	}
 	return len(text)
 }
@@ -114,9 +121,18 @@ func isKeyLine(text string, pos protocol.Position) bool {
 	if int(pos.Line) >= len(lines) {
 		return false
 	}
-	line := lines[pos.Line]
-	if int(pos.Character) > len(line) {
-		return !strings.Contains(line, ":")
+	return !strings.Contains(lineUpToUTF16(lines[pos.Line], pos.Character), ":")
+}
+
+// lineUpToUTF16 returns the prefix of line preceding the given UTF-16
+// column, or all of line when the column is at or past its end.
+func lineUpToUTF16(line string, utf16Col uint32) string {
+	var col uint32
+	for i, r := range line {
+		if col >= utf16Col {
+			return line[:i]
+		}
+		col += utf16RuneLen(r)
 	}
-	return !strings.Contains(line[:pos.Character], ":")
+	return line
 }

@@ -83,8 +83,13 @@ func applyRangeChange(text string, c protocol.TextDocumentContentChangeEvent) st
 func offsetAt(text string, pos protocol.Position) int {
 	line, col := uint32(0), uint32(0)
 	for i, r := range text {
-		if line == pos.Line && col >= pos.Character {
-			return i
+		if line == pos.Line {
+			if col >= pos.Character {
+				return i
+			}
+			if r == '\n' {
+				return i // column past end of line: clamp to line end
+			}
 		}
 		if r == '\n' {
 			line++
