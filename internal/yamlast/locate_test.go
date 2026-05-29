@@ -41,6 +41,28 @@ func TestLocateRange_ScalarHasNonZeroWidth(t *testing.T) {
 	}
 }
 
+func TestLocateRange_NumericMappingKeyNotTreatedAsIndex(t *testing.T) {
+	// 8080 is a mapping key, not an array index. The range must land on the
+	// value (line 1), not fall back to the whole document body (line 0).
+	text := "ports:\n  8080: tcp\n"
+	parsed := Parse([]byte(text))
+	r := LocateRange(parsed.Docs()[0], "/ports/8080", text)
+	if r.Start.Line != 1 {
+		t.Errorf("numeric-key range start line = %d, want 1 (got whole-doc fallback?)", r.Start.Line)
+	}
+}
+
+func TestLocateRange_KeyWithDotAndSlash(t *testing.T) {
+	// app.kubernetes.io/name is a single key; the '/' is JSON-Pointer escaped
+	// as ~1. It must resolve to the value (line 2), not the document body.
+	text := "metadata:\n  annotations:\n    app.kubernetes.io/name: web\n"
+	parsed := Parse([]byte(text))
+	r := LocateRange(parsed.Docs()[0], "/metadata/annotations/app.kubernetes.io~1name", text)
+	if r.Start.Line != 2 {
+		t.Errorf("dotted/slash-key range start line = %d, want 2", r.Start.Line)
+	}
+}
+
 func TestUTF16Position_TranslatesRuneColumnsToUTF16(t *testing.T) {
 	// goccy reports the value token at rune column 7 (1-based): the six
 	// preceding runes are 😀,k,e,y,:,space. 😀 is two UTF-16 code units, so

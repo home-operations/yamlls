@@ -1,52 +1,18 @@
 package yamlast
 
 import (
+	"strconv"
 	"strings"
 	"unicode/utf16"
 
-	yaml "github.com/goccy/go-yaml"
 	"github.com/goccy/go-yaml/ast"
 	"github.com/goccy/go-yaml/token"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
 
-// JSONPointerToYAMLPath converts an RFC 6901 JSON Pointer into goccy's
-// YAMLPath form (`/a/b/0` → `$.a.b[0]`).
-func JSONPointerToYAMLPath(ptr string) string {
-	if ptr == "" || ptr == "/" {
-		return "$"
-	}
-	var b strings.Builder
-	b.WriteByte('$')
-	for _, raw := range strings.Split(strings.TrimPrefix(ptr, "/"), "/") {
-		seg := unescapePointerSegment(raw)
-		if isAllDigits(seg) {
-			b.WriteByte('[')
-			b.WriteString(seg)
-			b.WriteByte(']')
-			continue
-		}
-		b.WriteByte('.')
-		b.WriteString(seg)
-	}
-	return b.String()
-}
-
 func unescapePointerSegment(s string) string {
 	s = strings.ReplaceAll(s, "~1", "/")
 	return strings.ReplaceAll(s, "~0", "~")
-}
-
-func isAllDigits(s string) bool {
-	if s == "" {
-		return false
-	}
-	for _, r := range s {
-		if r < '0' || r > '9' {
-			return false
-		}
-	}
-	return true
 }
 
 // LocateRange returns the LSP range that covers the node at ptr. src is the
@@ -69,15 +35,52 @@ func lookup(doc *ast.DocumentNode, ptr string) (ast.Node, bool) {
 	if ptr == "" || ptr == "/" {
 		return doc.Body, true
 	}
-	yp, err := yaml.PathString(JSONPointerToYAMLPath(ptr))
-	if err != nil {
-		return nil, false
+	node := doc.Body
+	for _, raw := range strings.Split(strings.TrimPrefix(ptr, "/"), "/") {
+		next, ok := descend(node, unescapePointerSegment(raw))
+		if !ok {
+			return nil, false
+		}
+		node = next
 	}
-	n, err := yp.FilterNode(doc.Body)
-	if err != nil || n == nil {
-		return nil, false
+	return node, true
+}
+
+// descend resolves one JSON-Pointer segment against a YAML node. The node
+// type decides interpretation: a segment is matched against mapping keys by
+// exact string and against sequence elements by index. This is why a
+// numeric-looking mapping key (e.g. a port number) or a key containing '.'
+// or '/' resolves correctly, where a YAMLPath round-trip would mis-parse it.
+func descend(node ast.Node, seg string) (ast.Node, bool) {
+	switch n := node.(type) {
+	case *ast.MappingNode:
+		for _, kv := range n.Values {
+			if mapKeyString(kv.Key) == seg {
+				return kv.Value, true
+			}
+		}
+	case *ast.MappingValueNode:
+		if mapKeyString(n.Key) == seg {
+			return n.Value, true
+		}
+	case *ast.SequenceNode:
+		if i, err := strconv.Atoi(seg); err == nil && i >= 0 && i < len(n.Values) {
+			return n.Values[i], true
+		}
 	}
-	return n, true
+	return nil, false
+}
+
+func mapKeyString(n ast.Node) string {
+	if s, ok := n.(*ast.StringNode); ok {
+		return s.Value
+	}
+	if n != nil {
+		if tok := n.GetToken(); tok != nil {
+			return tok.Value
+		}
+	}
+	return ""
 }
 
 func nodeRange(src string, n ast.Node) protocol.Range {
