@@ -45,6 +45,33 @@ func (r *recorder) diags(uri string) []protocol.Diagnostic {
 	return r.last[uri]
 }
 
+func TestSettings_OverridesSurviveWorkspaceFolderChange(t *testing.T) {
+	rec := &recorder{}
+	s := New("test", render.NewRegistry())
+
+	// A client pushes kubernetes.schemaUrl via didChangeConfiguration.
+	if err := s.didChangeConfig(rec.ctx(), &protocol.DidChangeConfigurationParams{
+		Settings: map[string]any{"kubernetes": map[string]any{"schemaUrl": "https://mirror/{kindLower}.json"}},
+	}); err != nil {
+		t.Fatalf("didChangeConfig: %v", err)
+	}
+	if s.settings.Kubernetes == nil || s.settings.Kubernetes.SchemaURL == "" {
+		t.Fatalf("override not applied: %+v", s.settings.Kubernetes)
+	}
+
+	// Adding a workspace folder must not discard that override.
+	if err := s.didChangeWorkspaceFolders(rec.ctx(), &protocol.DidChangeWorkspaceFoldersParams{
+		Event: protocol.WorkspaceFoldersChangeEvent{
+			Added: []protocol.WorkspaceFolder{{URI: "file:///tmp/yamlls-test-ws"}},
+		},
+	}); err != nil {
+		t.Fatalf("didChangeWorkspaceFolders: %v", err)
+	}
+	if s.settings.Kubernetes == nil || s.settings.Kubernetes.SchemaURL != "https://mirror/{kindLower}.json" {
+		t.Errorf("override dropped after workspace-folder change: %+v", s.settings.Kubernetes)
+	}
+}
+
 func TestDiagnostics_ReloadOnWholeChange(t *testing.T) {
 	ml := schemaModeline(t)
 	rec := &recorder{}

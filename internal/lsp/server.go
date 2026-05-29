@@ -36,9 +36,16 @@ type Server struct {
 	connMu     sync.Mutex
 	connNotify glsp.NotifyFunc
 
-	settingsMu    sync.Mutex
-	settings      config.Settings
-	workspaceRoot string
+	// settings is the effective merge; workspaceSettings (from .yamlls.yaml)
+	// is the lowest-precedence layer and overrides holds initializationOptions
+	// + didChangeConfiguration. Tracking the layers separately lets a
+	// workspace-folder change reload the file layer without discarding the
+	// higher-precedence client config.
+	settingsMu        sync.Mutex
+	settings          config.Settings
+	workspaceSettings config.Settings
+	overrides         config.Settings
+	workspaceRoot     string
 }
 
 func New(version string, registry *render.Registry) *Server {
@@ -98,21 +105,24 @@ func (s *Server) initialize(ctx *glsp.Context, params *protocol.InitializeParams
 
 	root := pickWorkspaceRoot(params)
 	var (
-		settings config.Settings
-		err      error
+		ws  config.Settings
+		err error
 	)
 	if root != "" {
 		s.workspaceRoot = root
-		settings, err = config.LoadFromWorkspace(root)
+		ws, err = config.LoadFromWorkspace(root)
 		if err != nil {
 			notifyShowMessage(ctx, protocol.MessageTypeWarning,
 				"yamlls: failed to load .yamlls.yaml: "+err.Error())
 		}
 	}
+	s.settingsMu.Lock()
+	s.workspaceSettings = ws
 	if init := settingsFromInitOptions(params.InitializationOptions); init != nil {
-		settings = config.Merge(settings, *init)
+		s.overrides = *init
 	}
-	s.applySettings(settings)
+	s.settingsMu.Unlock()
+	s.applyLayers()
 
 	return protocol.InitializeResult{
 		Capabilities: caps,
@@ -155,12 +165,25 @@ func settingsFromInitOptions(opts any) *config.Settings {
 	return &parsed
 }
 
-func (s *Server) applySettings(settings config.Settings) {
+// applyLayers recomputes the effective settings from the workspace layer
+// (lowest precedence) and the overrides layer, then pushes them to the
+// resolver and renderers.
+func (s *Server) applyLayers() {
 	s.settingsMu.Lock()
-	s.settings = settings
+	effective := config.Merge(s.workspaceSettings, s.overrides)
+	s.settings = effective
 	s.settingsMu.Unlock()
-	s.resolver.SetSettings(settings)
-	s.renderer.Configure(settings.Renderers)
+	s.resolver.SetSettings(effective)
+	s.renderer.Configure(effective.Renderers)
+}
+
+// setWorkspaceLayer replaces the .yamlls.yaml layer (e.g. after a
+// workspace-folder change) while preserving the override layer.
+func (s *Server) setWorkspaceLayer(ws config.Settings) {
+	s.settingsMu.Lock()
+	s.workspaceSettings = ws
+	s.settingsMu.Unlock()
+	s.applyLayers()
 }
 
 func (s *Server) applySettingsRaw(raw json.RawMessage) {
@@ -168,13 +191,10 @@ func (s *Server) applySettingsRaw(raw json.RawMessage) {
 	if err != nil {
 		return
 	}
-	s.applySettings(config.Merge(s.currentSettings(), settings))
-}
-
-func (s *Server) currentSettings() config.Settings {
 	s.settingsMu.Lock()
-	defer s.settingsMu.Unlock()
-	return s.settings
+	s.overrides = config.Merge(s.overrides, settings)
+	s.settingsMu.Unlock()
+	s.applyLayers()
 }
 
 func notifyShowMessage(ctx *glsp.Context, level protocol.MessageType, msg string) {

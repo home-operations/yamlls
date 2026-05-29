@@ -197,18 +197,19 @@ func (s *Server) scheduleRenderForURI(uri string) {
 }
 
 func (s *Server) didChangeWorkspaceFolders(ctx *glsp.Context, params *protocol.DidChangeWorkspaceFoldersParams) error {
-	var root string
-	if added := params.Event.Added; len(added) > 0 {
-		root = added[0].URI
+	added := params.Event.Added
+	if len(added) == 0 {
+		// Only folders were removed: keep the current workspace settings
+		// rather than wiping them (and the override layer with them).
+		return nil
 	}
-	settings := config.Settings{}
-	if root != "" {
-		if loaded, err := config.LoadFromWorkspace(root); err == nil {
-			settings = loaded
-		}
+	root := added[0].URI
+	var ws config.Settings
+	if loaded, err := config.LoadFromWorkspace(root); err == nil {
+		ws = loaded
 	}
 	s.workspaceRoot = root
-	s.applySettings(settings)
+	s.setWorkspaceLayer(ws)
 	for _, uri := range s.docs.AllURIs() {
 		if d, ok := s.docs.Get(uri); ok {
 			s.publishDiagnostics(ctx, d)
