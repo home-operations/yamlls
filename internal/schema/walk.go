@@ -33,8 +33,17 @@ func unescape(s string) string {
 }
 
 func follow(s *jsonschema.Schema) *jsonschema.Schema {
-	for i := 0; s != nil && s.Ref != nil && i < 32; i++ {
-		s = s.Ref
+	for i := 0; s != nil && i < 32; i++ {
+		switch {
+		case s.Ref != nil:
+			s = s.Ref
+		case s.RecursiveRef != nil:
+			s = s.RecursiveRef
+		case s.DynamicRef != nil:
+			s = s.DynamicRef
+		default:
+			return s
+		}
 	}
 	return s
 }
@@ -69,6 +78,13 @@ func step(s *jsonschema.Schema, seg string) *jsonschema.Schema {
 			if r := step(follow(b), seg); r != nil {
 				return r
 			}
+		}
+	}
+	// patternProperties before additionalProperties, matching JSON Schema
+	// precedence; common for label/annotation maps and `x-` extension keys.
+	for re, sub := range s.PatternProperties {
+		if re.MatchString(seg) {
+			return sub
 		}
 	}
 	if ap, ok := s.AdditionalProperties.(*jsonschema.Schema); ok {
