@@ -2,12 +2,12 @@ package schema
 
 import (
 	"fmt"
-	"net/url"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/home-operations/yamlls/internal/uri"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	_ "github.com/santhosh-tekuri/jsonschema/v5/httploader"
 )
@@ -82,7 +82,7 @@ func absRef(ref, docPath string) (string, error) {
 		return ref, nil
 	}
 	if filepath.IsAbs(ref) {
-		return "file://" + filepath.ToSlash(ref), nil
+		return uri.FromPath(ref), nil
 	}
 	if docPath == "" {
 		return "", fmt.Errorf("relative schema path %q has no document anchor", ref)
@@ -91,6 +91,5 @@ func absRef(ref, docPath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	u := url.URL{Scheme: "file", Path: filepath.ToSlash(abs)}
-	return u.String(), nil
+	return uri.FromPath(abs), nil
 }

@@ -2,7 +2,6 @@ package lsp
 
 import (
 	"encoding/json"
-	"net/url"
 
 	"github.com/home-operations/yamlls/internal/actions"
 	"github.com/home-operations/yamlls/internal/completion"
@@ -15,6 +14,7 @@ import (
 	"github.com/home-operations/yamlls/internal/links"
 	"github.com/home-operations/yamlls/internal/render"
 	"github.com/home-operations/yamlls/internal/symbols"
+	"github.com/home-operations/yamlls/internal/uri"
 	"github.com/home-operations/yamlls/internal/yamlast"
 	"github.com/santhosh-tekuri/jsonschema/v5"
 	"github.com/tliron/glsp"
@@ -249,12 +249,8 @@ func (s *Server) clearDiagnostics(ctx *glsp.Context, uri string) {
 	})
 }
 
-func uriToPath(uri string) string {
-	u, err := url.Parse(uri)
-	if err != nil || u.Scheme != "file" {
-		return ""
-	}
-	return u.Path
+func uriToPath(docURI string) string {
+	return uri.ToPath(docURI)
 }
 
 func schemaLoadDiag(err error) protocol.Diagnostic {

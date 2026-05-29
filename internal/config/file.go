@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"maps"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 
 	yaml "github.com/goccy/go-yaml"
+	"github.com/home-operations/yamlls/internal/uri"
 )
 
 const WorkspaceConfigFile = ".yamlls.yaml"
@@ -78,11 +78,7 @@ func workspacePath(rootURI string) string {
 	if rootURI == "" {
 		return ""
 	}
-	u, err := url.Parse(rootURI)
-	if err != nil || u.Scheme != "file" {
-		return ""
-	}
-	return u.Path
+	return uri.ToPath(rootURI)
 }
 
 // Merge applies override on top of base. Non-zero scalars and non-nil
