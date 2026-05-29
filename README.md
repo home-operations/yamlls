@@ -63,6 +63,10 @@ go install github.com/home-operations/flate/cmd/flate@latest
 `yamlls` speaks LSP 3.16 over stdio. Put the binary on `$PATH` or pass
 an absolute path.
 
+Packaged extensions for **VS Code** and **Zed** live in [`editors/`](editors);
+they download the matching `yamlls` (and `flate`) release binary automatically.
+The snippets below are for editors with built-in LSP support.
+
 ### Neovim (nvim-lspconfig)
 
 ```lua
@@ -85,35 +89,11 @@ lspconfig.yamlls.setup({})
 
 ### VSCode
 
-Minimal extension:
-
-```jsonc
-// package.json
-{
-  "name": "yamlls",
-  "engines": { "vscode": "^1.85.0" },
-  "activationEvents": ["onLanguage:yaml"],
-  "main": "./extension.js"
-}
-```
-
-```js
-// extension.js  (vscode-languageclient v9+)
-const { LanguageClient } = require("vscode-languageclient/node");
-
-let client;
-exports.activate = function (ctx) {
-  client = new LanguageClient(
-    "yamlls",
-    "yamlls",
-    { command: "yamlls" },
-    { documentSelector: [{ scheme: "file", language: "yaml" }] }
-  );
-  client.start();              // returns Promise<void>, fire-and-forget
-  ctx.subscriptions.push(client);
-};
-exports.deactivate = () => client?.stop();
-```
+Use the extension in [`editors/vscode`](editors/vscode) — it downloads the
+`yamlls` binary (and `flate` for Flux rendering) on first activation, and
+exposes `yamlls.*` settings. To build and run it locally, press <kbd>F5</kbd>
+from that directory; to package a `.vsix`, run `vsce package`. See its
+[README](editors/vscode/README.md) for settings and publishing.
 
 ### Helix
 
@@ -129,9 +109,24 @@ language-servers = ["yamlls"]
 
 ### Zed
 
-Zed's `lsp` key only accepts known language-server identifiers, so
-`yamlls` as a top-level key triggers `Property yamlls is not allowed`.
-Override Zed's bundled `yaml-language-server` binary instead:
+Use the extension in [`editors/zed`](editors/zed) — it registers `yamlls` as a
+language server for the YAML language and downloads the binary for you (install
+it via **zed: install dev extension**). Since Zed bundles its own
+`yaml-language-server`, make `yamlls` the only one in
+`~/.config/zed/settings.json`:
+
+```jsonc
+{
+  "languages": {
+    "YAML": { "language_servers": ["yamlls", "!yaml-language-server"] }
+  }
+}
+```
+
+Without the extension, Zed's `lsp` key only accepts known language-server
+identifiers (`yamlls` as a top-level key triggers `Property yamlls is not
+allowed`), so the settings-only alternative is to override the bundled
+`yaml-language-server` binary:
 
 ```jsonc
 // ~/.config/zed/settings.json

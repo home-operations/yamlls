@@ -1,0 +1,107 @@
+{
+  "name": "yamlls",
+  "displayName": "yamlls",
+  "description": "YAML language server in Go: schema-driven diagnostics, completion, hover, and Flux rendering.",
+  "version": "0.1.0",
+  "publisher": "home-operations",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/home-operations/yamlls",
+    "directory": "editors/vscode"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["Programming Languages", "Linters"],
+  "activationEvents": ["onLanguage:yaml"],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "yaml",
+        "aliases": ["YAML", "yaml"],
+        "extensions": [".yaml", ".yml"]
+      }
+    ],
+    "commands": [
+      {
+        "command": "yamlls.showRendered",
+        "title": "yamlls: Show Rendered Output"
+      },
+      {
+        "command": "yamlls.restart",
+        "title": "yamlls: Restart Language Server"
+      }
+    ],
+    "configuration": {
+      "title": "yamlls",
+      "properties": {
+        "yamlls.path": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Absolute path to a `yamlls` binary. When set, the extension uses it instead of downloading a release."
+        },
+        "yamlls.version": {
+          "type": "string",
+          "default": "latest",
+          "description": "Release tag to download (e.g. \"0.0.5\"), or \"latest\"."
+        },
+        "yamlls.catalog": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable JSON Schema Store catalog lookups."
+        },
+        "yamlls.catalogUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Override the schema catalog URL."
+        },
+        "yamlls.schemas": {
+          "type": "object",
+          "default": {},
+          "markdownDescription": "Map of schema URI/path → array of file globs. Mirrors the `schemas:` block in `.yamlls.yaml`."
+        },
+        "yamlls.kubernetes.schemaUrl": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Override the Kubernetes auto-detect URL template. Placeholders: `{group}`, `{groupSeg}`, `{kind}`, `{kindLower}`, `{version}`, `{versionLower}`, …"
+        },
+        "yamlls.flate.enabled": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Download [`flate`](https://github.com/home-operations/flate) and enable Flux `HelmRelease` / `Kustomization` rendering."
+        },
+        "yamlls.flate.path": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Absolute path to a `flate` binary. When set, skips the download."
+        },
+        "yamlls.flate.version": {
+          "type": "string",
+          "default": "latest",
+          "description": "flate release tag to download (e.g. \"0.1.32\"), or \"latest\"."
+        },
+        "yamlls.trace.server": {
+          "type": "string",
+          "enum": ["off", "messages", "verbose"],
+          "default": "off",
+          "description": "Trace LSP traffic between VS Code and yamlls."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "dependencies": {
+    "vscode-languageclient": "^9.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "typescript": "^5.4.0"
+  }
+}

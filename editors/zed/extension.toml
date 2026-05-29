@@ -1,0 +1,21 @@
+id = "yamlls"
+name = "yamlls"
+description = "YAML language server in Go: schema-driven diagnostics, completion, hover, and Flux rendering."
+version = "0.1.0"
+schema_version = 1
+authors = ["home-operations"]
+repository = "https://github.com/home-operations/yamlls"
+
+# Registers yamlls as a language server for Zed's built-in YAML language.
+# Zed ships its own yaml-language-server; to make yamlls the only one, add to
+# your settings.json:
+#   "languages": { "YAML": { "language_servers": ["yamlls", "!yaml-language-server"] } }
+[language_servers.yamlls]
+name = "yamlls"
+languages = ["YAML"]
+
+# Required so the extension may fetch release binaries from GitHub.
+[[capabilities]]
+kind = "download_file"
+host = "github.com"
+path = ["home-operations", "yamlls", "**"]
