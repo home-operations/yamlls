@@ -108,6 +108,42 @@ func TestRun_DirectoryWalkFindsInvalidFile(t *testing.T) {
 	}
 }
 
+func TestRun_MultiDocReportsInvalidDoc(t *testing.T) {
+	root := setupWorkspace(t)
+	doc := filepath.Join(root, "multi.yaml")
+	mustWrite(t, doc, "# yaml-language-server: $schema=./person.json\n"+
+		"name: Alice\nage: 30\n"+
+		"---\n# yaml-language-server: $schema=./person.json\n"+
+		"name: Bob\nage: \"bad\"\n"+
+		"---\n# yaml-language-server: $schema=./person.json\n"+
+		"name: Carol\nage: 40\n")
+
+	code, stdout, _ := run(t, root, doc)
+	if code != 1 {
+		t.Errorf("exit code = %d, want 1; output: %q", code, stdout)
+	}
+	if got := strings.Count(stdout, "/age"); got != 1 {
+		t.Errorf("expected exactly one /age error (only Bob is invalid), got %d: %q", got, stdout)
+	}
+}
+
+func TestRun_MultiDocDedupsLoadFailureWarning(t *testing.T) {
+	root := setupWorkspace(t)
+	doc := filepath.Join(root, "missing.yaml")
+	// Two docs both pin the same nonexistent schema; the warning must
+	// collapse to one despite concurrent validation.
+	mustWrite(t, doc, "# yaml-language-server: $schema=./nope.json\na: 1\n"+
+		"---\n# yaml-language-server: $schema=./nope.json\nb: 2\n")
+
+	code, stdout, _ := run(t, root, doc)
+	if code != 0 {
+		t.Errorf("exit code = %d, want 0 (load failure is a warning); output: %q", code, stdout)
+	}
+	if got := strings.Count(stdout, "schema load failed"); got != 1 {
+		t.Errorf("expected exactly one deduped load-failure warning, got %d: %q", got, stdout)
+	}
+}
+
 func TestRun_NoArgsExitsTwo(t *testing.T) {
 	var out, errb bytes.Buffer
 	if code := lint.Run(nil, &out, &errb); code != 2 {

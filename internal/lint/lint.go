@@ -4,11 +4,19 @@
 package lint
 
 import (
+	"sync"
+
+	"github.com/goccy/go-yaml/ast"
 	"github.com/home-operations/yamlls/internal/diagnostics"
 	"github.com/home-operations/yamlls/internal/schema"
 	"github.com/home-operations/yamlls/internal/yamlast"
 	protocol "github.com/tliron/glsp/protocol_3_16"
 )
+
+// docConcurrency bounds how many documents of one multi-doc file validate
+// at once. Validation is I/O-bound on schema fetches, so this exceeds core
+// count; the Store coalesces concurrent fetches of the same schema.
+const docConcurrency = 8
 
 // Document validates a single file's text. path is the on-disk path used
 // for relative schema resolution. It returns the parse error (if any),
@@ -25,32 +33,76 @@ func Document(text, path string, resolver *schema.Resolver, store *schema.Store)
 		diags = append(diags, diagnostics.ParseErrorDiagnostic(parsed.Err))
 	}
 
-	// Surface load failures only for file-level refs; per-doc auto-detect
-	// would warn on every CRD missing from the configured mirror.
-	loadFailures := make(map[string]bool)
-	for _, doc := range parsed.Docs() {
-		ref := schema.FindModelineSchemaForDoc(doc)
-		if ref == "" {
-			ref = fileRef
+	// Documents are independent, so validate them concurrently; their slow
+	// part is fetching distinct schemas. Single-doc files (the common case)
+	// stay on the inline path to avoid goroutine overhead.
+	docs := parsed.Docs()
+	results := make([]docResult, len(docs))
+	switch len(docs) {
+	case 0:
+	case 1:
+		results[0] = validateOneDoc(docs[0], fileRef, text, path, resolver, store)
+	default:
+		var wg sync.WaitGroup
+		sem := make(chan struct{}, docConcurrency)
+		for i, doc := range docs {
+			wg.Add(1)
+			sem <- struct{}{}
+			go func(i int, doc *ast.DocumentNode) {
+				defer wg.Done()
+				defer func() { <-sem }()
+				results[i] = validateOneDoc(doc, fileRef, text, path, resolver, store)
+			}(i, doc)
 		}
-		userIntent := ref != ""
-		if ref == "" {
-			ref = resolver.K8sURLForNode(doc.Body)
-		}
-		if ref == "" {
-			continue
-		}
-		sch, err := store.Get(ref, path)
-		if err != nil {
-			if userIntent && !loadFailures[ref] {
-				loadFailures[ref] = true
-				diags = append(diags, SchemaLoadDiagnostic(err))
+		wg.Wait()
+	}
+
+	// Reassemble in document order, deduping load-failure warnings to one
+	// per ref so concurrency doesn't change what the sequential loop emitted.
+	seen := make(map[string]bool)
+	for _, r := range results {
+		if r.loadErr != nil {
+			if !seen[r.ref] {
+				seen[r.ref] = true
+				diags = append(diags, SchemaLoadDiagnostic(r.loadErr))
 			}
 			continue
 		}
-		diags = append(diags, diagnostics.ValidateDoc(doc, sch, text)...)
+		diags = append(diags, r.diags...)
 	}
 	return diags
+}
+
+type docResult struct {
+	ref     string
+	loadErr error
+	diags   []protocol.Diagnostic
+}
+
+// validateOneDoc resolves and validates a single document. A load failure
+// is reported only for a user-intended ref (modeline or workspace glob);
+// per-doc Kubernetes auto-detect stays silent so a CRD missing from the
+// mirror doesn't warn.
+func validateOneDoc(doc *ast.DocumentNode, fileRef, text, path string, resolver *schema.Resolver, store *schema.Store) docResult {
+	ref := schema.FindModelineSchemaForDoc(doc)
+	if ref == "" {
+		ref = fileRef
+	}
+	userIntent := ref != ""
+	if ref == "" {
+		ref = resolver.K8sURLForNode(doc.Body)
+	}
+	if ref == "" {
+		return docResult{}
+	}
+	sch, err := store.Get(ref, path)
+	if err != nil {
+		if userIntent {
+			return docResult{ref: ref, loadErr: err}
+		}
+		return docResult{}
+	}
+	return docResult{diags: diagnostics.ValidateDoc(doc, sch, text)}
 }
 
 // SchemaLoadDiagnostic is the file-level warning emitted when a
