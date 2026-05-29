@@ -71,23 +71,54 @@ func (v *cursorVisitor) Visit(n ast.Node) ast.Visitor {
 	return v
 }
 
+// pathToPointer converts goccy's YAMLPath (e.g. `$.a.'b.c'[0]`) into an RFC
+// 6901 JSON Pointer. goccy single-quotes keys containing metacharacters, so
+// a quoted segment is taken verbatim (dots inside it are part of the key),
+// and every key segment is JSON-Pointer escaped so '/' and '~' survive — the
+// same escaping the indent fallback uses, keeping both paths consistent.
 func pathToPointer(yp string) string {
-	if yp == "" || yp == "$" {
+	rest := strings.TrimPrefix(yp, "$")
+	if rest == "" {
 		return ""
 	}
-	rest := strings.TrimPrefix(yp, "$")
 	var b strings.Builder
-	for i := 0; i < len(rest); i++ {
+	for i := 0; i < len(rest); {
 		switch rest[i] {
 		case '.':
-			b.WriteByte('/')
+			i++
+			if i < len(rest) && rest[i] == '\'' {
+				i++
+				start := i
+				for i < len(rest) && rest[i] != '\'' {
+					i++
+				}
+				seg := rest[start:i]
+				if i < len(rest) {
+					i++ // skip closing quote
+				}
+				b.WriteByte('/')
+				b.WriteString(escapePointerSegment(seg))
+			} else {
+				start := i
+				for i < len(rest) && rest[i] != '.' && rest[i] != '[' {
+					i++
+				}
+				b.WriteByte('/')
+				b.WriteString(escapePointerSegment(rest[start:i]))
+			}
 		case '[':
+			i++
+			start := i
+			for i < len(rest) && rest[i] != ']' {
+				i++
+			}
 			b.WriteByte('/')
-			for i++; i < len(rest) && rest[i] != ']'; i++ {
-				b.WriteByte(rest[i])
+			b.WriteString(rest[start:i])
+			if i < len(rest) {
+				i++ // skip closing ']'
 			}
 		default:
-			b.WriteByte(rest[i])
+			i++
 		}
 	}
 	return b.String()
