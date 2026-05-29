@@ -20,11 +20,21 @@ type Store struct {
 	mu       sync.Mutex
 	compiled map[string]*jsonschema.Schema
 	failures map[string]failure
+	inflight map[string]*inflightCompile
 }
 
 type failure struct {
 	err error
 	at  time.Time
+}
+
+// inflightCompile lets concurrent Get callers for the same key share a
+// single compile (and its network fetch) instead of racing to fetch the
+// same schema in parallel.
+type inflightCompile struct {
+	done chan struct{}
+	sch  *jsonschema.Schema
+	err  error
 }
 
 func NewStore() *Store {
@@ -33,6 +43,7 @@ func NewStore() *Store {
 	return &Store{
 		compiled: make(map[string]*jsonschema.Schema),
 		failures: make(map[string]failure),
+		inflight: make(map[string]*inflightCompile),
 	}
 }
 
@@ -50,6 +61,16 @@ func (s *Store) Get(ref, docPath string) (*jsonschema.Schema, error) {
 		s.mu.Unlock()
 		return nil, f.err
 	}
+	// Coalesce concurrent compiles of the same key: a single fetch serves
+	// every caller, so a 806-file run doesn't fire one network round-trip
+	// per file that shares a schema.
+	if call, ok := s.inflight[key]; ok {
+		s.mu.Unlock()
+		<-call.done
+		return call.sch, call.err
+	}
+	call := &inflightCompile{done: make(chan struct{})}
+	s.inflight[key] = call
 	s.mu.Unlock()
 
 	// Compile outside the lock: it may fetch the schema over the network,
@@ -62,18 +83,16 @@ func (s *Store) Get(ref, docPath string) (*jsonschema.Schema, error) {
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	delete(s.inflight, key)
 	if err != nil {
-		wrapped := fmt.Errorf("compile schema %s: %w", key, err)
-		s.failures[key] = failure{err: wrapped, at: time.Now()}
-		return nil, wrapped
+		call.err = fmt.Errorf("compile schema %s: %w", key, err)
+		s.failures[key] = failure{err: call.err, at: time.Now()}
+	} else {
+		call.sch = sch
+		s.compiled[key] = sch
 	}
-	// A concurrent caller may have compiled the same key while we were
-	// fetching; either compiled schema is equivalent, so keep the winner.
-	if existing, ok := s.compiled[key]; ok {
-		return existing, nil
-	}
-	s.compiled[key] = sch
-	return sch, nil
+	close(call.done)
+	return call.sch, call.err
 }
 
 func absRef(ref, docPath string) (string, error) {

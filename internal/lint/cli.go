@@ -7,6 +7,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/home-operations/yamlls/internal/config"
 	"github.com/home-operations/yamlls/internal/diagnostics"
@@ -58,28 +59,66 @@ func Run(argv []string, stdout, stderr io.Writer) int {
 	resolver.WaitForCatalog()
 	store := schema.NewStore()
 
+	// Validation is I/O-bound on schema fetches; run files concurrently so
+	// distinct schemas fetch in parallel. Results are collected per index
+	// and printed in input order for deterministic output.
+	results := make([]fileResult, len(files))
+	sem := make(chan struct{}, validateConcurrency)
+	var wg sync.WaitGroup
+	for i, p := range files {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(i int, p string) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			results[i] = validateFile(p, resolver, store)
+		}(i, p)
+	}
+	wg.Wait()
+
 	failed := false
-	for _, p := range files {
-		b, err := os.ReadFile(p)
-		if err != nil {
-			fmt.Fprintf(stderr, "yamlls: %v\n", err)
-			failed = true
-			continue
+	for _, r := range results {
+		for _, line := range r.errLines {
+			fmt.Fprintln(stderr, line)
 		}
-		text := string(b)
-		diags := Document(text, p, resolver, store)
-		diags = diagnostics.ParseSuppressions(text).Filter(diags)
-		for _, d := range diags {
-			fmt.Fprintln(stdout, formatDiagnostic(p, d))
-			if severityOf(d) == protocol.DiagnosticSeverityError {
-				failed = true
-			}
+		for _, line := range r.outLines {
+			fmt.Fprintln(stdout, line)
 		}
+		failed = failed || r.failed
 	}
 	if failed {
 		return 1
 	}
 	return 0
+}
+
+// validateConcurrency bounds in-flight files. The work is dominated by
+// network latency on schema fetches, so this is set well above core count.
+const validateConcurrency = 16
+
+type fileResult struct {
+	outLines []string
+	errLines []string
+	failed   bool
+}
+
+func validateFile(path string, resolver *schema.Resolver, store *schema.Store) fileResult {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return fileResult{errLines: []string{"yamlls: " + err.Error()}, failed: true}
+	}
+	text := string(b)
+	diags := Document(text, path, resolver, store)
+	diags = diagnostics.ParseSuppressions(text).Filter(diags)
+
+	var res fileResult
+	for _, d := range diags {
+		res.outLines = append(res.outLines, formatDiagnostic(path, d))
+		if severityOf(d) == protocol.DiagnosticSeverityError {
+			res.failed = true
+		}
+	}
+	return res
 }
 
 // collectYAML expands directory arguments into their *.yaml/*.yml files;
