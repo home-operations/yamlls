@@ -3,6 +3,8 @@ package diagnostics
 import (
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 
 	"github.com/goccy/go-yaml/ast"
 	"github.com/home-operations/yamlls/internal/yamlast"
@@ -130,12 +132,54 @@ func displayPointer(p string) string {
 }
 
 func parseErrorDiag(err error) protocol.Diagnostic {
+	rng, msg := parseErrorLocation(err.Error())
 	return protocol.Diagnostic{
 		Severity: ptr(protocol.DiagnosticSeverityError),
 		Source:   ptr(Source),
-		Message:  err.Error(),
-		Range:    protocol.Range{},
+		Message:  msg,
+		Range:    rng,
 	}
+}
+
+// parseErrorLocation pulls the position out of goccy's syntax-error text,
+// which is formatted as "[line:col] message" followed by a source snippet.
+// The snippet is dropped and the position anchors the diagnostic; if the
+// prefix is absent the message is returned as-is at the document start.
+func parseErrorLocation(s string) (protocol.Range, string) {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = s[:i]
+	}
+	if !strings.HasPrefix(s, "[") {
+		return protocol.Range{}, s
+	}
+	close := strings.IndexByte(s, ']')
+	if close < 0 {
+		return protocol.Range{}, s
+	}
+	line, col, ok := splitLineCol(s[1:close])
+	if !ok {
+		return protocol.Range{}, s
+	}
+	pos := protocol.Position{Line: oneBasedToZero(line), Character: oneBasedToZero(col)}
+	rng := protocol.Range{Start: pos, End: protocol.Position{Line: pos.Line, Character: pos.Character + 1}}
+	return rng, strings.TrimSpace(s[close+1:])
+}
+
+func splitLineCol(s string) (line, col int, ok bool) {
+	colon := strings.IndexByte(s, ':')
+	if colon < 0 {
+		return 0, 0, false
+	}
+	line, err1 := strconv.Atoi(s[:colon])
+	col, err2 := strconv.Atoi(s[colon+1:])
+	return line, col, err1 == nil && err2 == nil
+}
+
+func oneBasedToZero(n int) uint32 {
+	if n > 0 {
+		return uint32(n - 1)
+	}
+	return 0
 }
 
 func ptr[T any](v T) *T { return &v }
