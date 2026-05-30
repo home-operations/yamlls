@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.0.7](https://github.com/home-operations/yayamlls/compare/0.0.6...0.0.7) (2026-05-30)
+
+
+### Features
+
+* Ability to set flux repo root ([e7c7657](https://github.com/home-operations/yayamlls/commit/e7c7657d886fb5e3789ba8ecc72f196710d453e2))
+
 ## [0.0.6](https://github.com/home-operations/yamlls/compare/0.0.5...0.0.6) (2026-05-29)
 
 
