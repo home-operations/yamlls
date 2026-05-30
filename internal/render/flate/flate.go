@@ -25,6 +25,8 @@ type Renderer struct {
 	disabled bool
 	resolved string // cached exec.LookPath result for the current Binary
 	looked   bool   // whether resolution has been attempted for current Binary
+	root     string // configured build path (--path); empty = build the file's own dir
+	wsRoot   string // workspace root, to anchor a relative root
 }
 
 func New() *Renderer { return &Renderer{Binary: providerName} }
@@ -32,6 +34,7 @@ func New() *Renderer { return &Renderer{Binary: providerName} }
 type fileConfig struct {
 	Enabled *bool  `json:"enabled,omitempty"`
 	Binary  string `json:"binary,omitempty"`
+	Path    string `json:"path,omitempty"`
 }
 
 func (r *Renderer) Configure(raw json.RawMessage) error {
@@ -52,7 +55,14 @@ func (r *Renderer) Configure(raw json.RawMessage) error {
 		r.resolved = ""
 		r.looked = false
 	}
+	r.root = cfg.Path
 	return nil
+}
+
+func (r *Renderer) SetWorkspaceRoot(root string) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.wsRoot = root
 }
 
 func (r *Renderer) IsEnabled() bool {
@@ -69,15 +79,23 @@ func (r *Renderer) Matches(doc *render.SourceDocument) bool {
 }
 
 func (r *Renderer) Render(ctx context.Context, doc *render.SourceDocument) (*render.RenderedOutput, error) {
-	sub, dir, err := subcommandFor(doc)
+	sub, err := subcommandFor(doc)
 	if err != nil {
 		return nil, err
+	}
+	args, err := r.buildArgs(sub, doc)
+	if err != nil {
+		return nil, err
+	}
+	if args == nil {
+		// No name to scope to; skip rather than render the whole tree.
+		return &render.RenderedOutput{Provider: r.Name()}, nil
 	}
 	bin, err := r.resolveBinary()
 	if err != nil {
 		return &render.RenderedOutput{Provider: r.Name()}, err
 	}
-	cmd := exec.CommandContext(ctx, bin, "build", sub, "--path", dir, "-o", "yaml")
+	cmd := exec.CommandContext(ctx, bin, args...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -118,22 +136,50 @@ func (r *Renderer) resolveBinary() (string, error) {
 	return r.resolved, nil
 }
 
-func subcommandFor(doc *render.SourceDocument) (sub, dir string, err error) {
+func subcommandFor(doc *render.SourceDocument) (sub string, err error) {
 	if doc == nil {
-		return "", "", errors.New("nil doc")
+		return "", errors.New("nil doc")
 	}
 	switch {
 	case render.MatchesKind(doc, "HelmRelease", "helm.toolkit.fluxcd.io"):
-		sub = "hr"
+		return "hr", nil
 	case render.MatchesKind(doc, "Kustomization", "kustomize.toolkit.fluxcd.io"):
-		sub = "ks"
+		return "ks", nil
 	default:
-		return "", "", fmt.Errorf("flate: unsupported kind %q", doc.Kind)
+		return "", fmt.Errorf("flate: unsupported kind %q", doc.Kind)
+	}
+}
+
+// buildArgs assembles the flate argv. A configured build path scans from that
+// root and selects the resource by metadata.name, so a source defined in
+// another directory resolves; without it, the document's own directory builds.
+// A nil result means skip: a root is set but no name is known yet.
+func (r *Renderer) buildArgs(sub string, doc *render.SourceDocument) ([]string, error) {
+	if root := r.targetRoot(); root != "" {
+		if doc.Name == "" {
+			return nil, nil
+		}
+		return []string{"build", sub, doc.Name, "--path", root, "-o", "yaml"}, nil
 	}
 	if doc.Path == "" {
-		return sub, "", errors.New("flate needs an on-disk file path")
+		return nil, errors.New("flate needs an on-disk file path")
 	}
-	return sub, filepath.Dir(doc.Path), nil
+	return []string{"build", sub, "--path", filepath.Dir(doc.Path), "-o", "yaml"}, nil
+}
+
+// targetRoot resolves the configured build path; a relative one anchors at the
+// workspace root. Empty when no path is configured.
+func (r *Renderer) targetRoot() string {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	switch {
+	case r.root == "":
+		return ""
+	case filepath.IsAbs(r.root), r.wsRoot == "":
+		return r.root
+	default:
+		return filepath.Join(r.wsRoot, r.root)
+	}
 }
 
 func parseManifests(stdout []byte) ([]render.RenderedManifest, error) {

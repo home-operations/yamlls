@@ -13,6 +13,7 @@ type SourceDocument struct {
 	AST      *ast.File
 	Kind     string
 	APIGroup string
+	Name     string
 }
 
 type RenderedManifest struct {

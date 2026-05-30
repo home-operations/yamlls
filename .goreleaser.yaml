@@ -75,7 +75,7 @@ homebrew_casks:
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     homepage: https://github.com/home-operations/yayamlls
     description: YAML language server with pluggable rendering for Flux sources.
-    # Binaries aren't notarized — strip the quarantine bit so macOS doesn't
+    # Binaries aren't notarized, so strip the quarantine bit so macOS doesn't
     # block the first run with "developer cannot be verified".
     hooks:
       post:

@@ -34,8 +34,8 @@ func defaultCacheDir() string {
 }
 
 // fetchTimeout bounds a single schema fetch. httploader's default client
-// has no timeout, so a hung host would otherwise block the fetch — and the
-// schema lookup waiting on it — indefinitely.
+// has no timeout, so a hung host would otherwise block the fetch (and the
+// schema lookup waiting on it) indefinitely.
 const fetchTimeout = 30 * time.Second
 
 // InstallDiskLoader replaces jsonschema's http+https loaders with a

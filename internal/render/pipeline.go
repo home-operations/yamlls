@@ -32,7 +32,7 @@ type cacheEntry struct {
 	err  error
 }
 
-// Sink.Notify runs on the pipeline's goroutine — implementations must be
+// Sink.Notify runs on the pipeline's goroutine; implementations must be
 // non-blocking.
 type Sink interface {
 	Notify(uri string, out *RenderedOutput, err error)
@@ -63,7 +63,7 @@ func (p *Pipeline) Schedule(doc *SourceDocument) {
 	p.mu.Lock()
 	// Supersede any pending or in-flight render for this URI: its content is
 	// now stale. Without this an older render can finish after a newer one
-	// and overwrite the current diagnostics with results for old text —
+	// and overwrite the current diagnostics with results for old text,
 	// which looks like diagnostics failing to update on edit.
 	if old := p.pending[doc.URI]; old != nil {
 		old.timer.Stop()

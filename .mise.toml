@@ -41,7 +41,7 @@ go build -ldflags "-X main.version=$version -X main.commit=$commit" -o bin/yayam
 '''
 
 [tasks.run]
-description = "Run yayamlls from source (rare — LSP clients spawn the binary)"
+description = "Run yayamlls from source (rare; LSP clients spawn the binary)"
 depends = ["fmt", "vet"]
 run = "go run ./cmd/yayamlls"
 

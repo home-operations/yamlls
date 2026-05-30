@@ -18,7 +18,7 @@ func unescapePointerSegment(s string) string {
 // LocateRange returns the LSP range that covers the node at ptr. src is the
 // document text, needed to translate goccy's rune-based columns into the
 // UTF-16 code units LSP uses. Falls back to the document body's range when
-// ptr can't be resolved — common for `required` violations where the field
+// ptr can't be resolved, common for `required` violations where the field
 // is simply missing.
 func LocateRange(doc *ast.DocumentNode, ptr, src string) protocol.Range {
 	node, ok := lookup(doc, ptr)
@@ -138,8 +138,8 @@ func tokenEnd(src string, t *token.Token) protocol.Position {
 	return protocol.Position{Line: line, Character: col}
 }
 
-// UTF16Position converts goccy's 1-based (line, runeCol) — whose column
-// counts Unicode code points — into a 0-based LSP position whose character
+// UTF16Position converts goccy's 1-based (line, runeCol), whose column
+// counts Unicode code points, into a 0-based LSP position whose character
 // counts UTF-16 code units. src supplies the line so columns past a
 // non-BMP rune are translated correctly.
 func UTF16Position(src string, line, runeCol int) protocol.Position {

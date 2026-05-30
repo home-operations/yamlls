@@ -76,11 +76,11 @@ func validateDoc(doc *ast.DocumentNode, sch *jsonschema.Schema, src string) []pr
 // CauseData rides on Diagnostic.Data so codeAction handlers can produce
 // quick-fixes without re-validating.
 type CauseData struct {
-	Kind             string `json:"kind"`             // jsonschema keyword: enum, required, type, …
+	Kind             string `json:"kind"`             // jsonschema keyword: enum, required, type, etc.
 	InstanceLocation string `json:"instanceLocation"` // JSON Pointer into the source document
 }
 
-// flattenValidationError emits one diagnostic per leaf cause — leaves
+// flattenValidationError emits one diagnostic per leaf cause. Leaves
 // carry the actionable message; root nodes are generic wrappers.
 func flattenValidationError(doc *ast.DocumentNode, verr *jsonschema.ValidationError, src string) []protocol.Diagnostic {
 	var out []protocol.Diagnostic

@@ -70,6 +70,99 @@ func writeStub(t *testing.T, body string) string {
 	return path
 }
 
+// writeArgStub is writeStub plus a recording of the argv to argsPath.
+func writeArgStub(t *testing.T, body string) (binPath, argsPath string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("stub script uses /bin/sh")
+	}
+	dir := t.TempDir()
+	binPath = filepath.Join(dir, "flate")
+	argsPath = filepath.Join(dir, "args")
+	script := "#!/bin/sh\necho \"$@\" > " + argsPath + "\ncat <<'YAML_EOF'\n" + body + "\nYAML_EOF\n"
+	if err := os.WriteFile(binPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return binPath, argsPath
+}
+
+func TestFlate_BuildPath_ScopesByName(t *testing.T) {
+	bin, argsPath := writeArgStub(t, "apiVersion: v1\nkind: Pod\nmetadata:\n  name: foo")
+	r := &flate.Renderer{Binary: bin}
+	if err := r.Configure(json.RawMessage(`{"path":"/repo/kubernetes"}`)); err != nil {
+		t.Fatalf("configure: %v", err)
+	}
+	src := &render.SourceDocument{
+		Path:     "/repo/kubernetes/apps/home-infra/frigate/app/hr.yaml",
+		Kind:     "HelmRelease",
+		APIGroup: "helm.toolkit.fluxcd.io/v2",
+		Name:     "frigate",
+	}
+	if _, err := r.Render(context.Background(), src); err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	got := readArgs(t, argsPath)
+	want := "build hr frigate --path /repo/kubernetes -o yaml"
+	if got != want {
+		t.Errorf("argv = %q, want %q", got, want)
+	}
+}
+
+func TestFlate_BuildPath_RelativeAnchoredAtWorkspaceRoot(t *testing.T) {
+	bin, argsPath := writeArgStub(t, "apiVersion: v1\nkind: Pod\nmetadata:\n  name: foo")
+	r := &flate.Renderer{Binary: bin}
+	if err := r.Configure(json.RawMessage(`{"path":"kubernetes"}`)); err != nil {
+		t.Fatalf("configure: %v", err)
+	}
+	r.SetWorkspaceRoot("/repo")
+	src := &render.SourceDocument{
+		Path:     "/repo/kubernetes/apps/home-infra/frigate/app/hr.yaml",
+		Kind:     "HelmRelease",
+		APIGroup: "helm.toolkit.fluxcd.io/v2",
+		Name:     "frigate",
+	}
+	if _, err := r.Render(context.Background(), src); err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	got := readArgs(t, argsPath)
+	want := "build hr frigate --path " + filepath.Join("/repo", "kubernetes") + " -o yaml"
+	if got != want {
+		t.Errorf("argv = %q, want %q", got, want)
+	}
+}
+
+func TestFlate_BuildPath_SkipsWhenNameUnknown(t *testing.T) {
+	bin, argsPath := writeArgStub(t, "apiVersion: v1\nkind: Pod\nmetadata:\n  name: foo")
+	r := &flate.Renderer{Binary: bin}
+	if err := r.Configure(json.RawMessage(`{"path":"/repo/kubernetes"}`)); err != nil {
+		t.Fatalf("configure: %v", err)
+	}
+	src := &render.SourceDocument{
+		Path:     "/repo/kubernetes/apps/home-infra/frigate/app/hr.yaml",
+		Kind:     "HelmRelease",
+		APIGroup: "helm.toolkit.fluxcd.io/v2",
+	}
+	out, err := r.Render(context.Background(), src)
+	if err != nil {
+		t.Fatalf("render: %v", err)
+	}
+	if len(out.Manifests) != 0 {
+		t.Errorf("expected no manifests when name is unknown, got %d", len(out.Manifests))
+	}
+	if _, err := os.Stat(argsPath); !os.IsNotExist(err) {
+		t.Errorf("flate should not have been invoked; stat err = %v", err)
+	}
+}
+
+func readArgs(t *testing.T, path string) string {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read args: %v", err)
+	}
+	return strings.TrimSpace(string(b))
+}
+
 func TestFlate_RenderHelmRelease(t *testing.T) {
 	rendered := `apiVersion: v1
 kind: Pod

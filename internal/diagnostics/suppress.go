@@ -75,7 +75,7 @@ func ParseSuppressions(text string) Suppressor {
 	return s
 }
 
-// commentOf returns the comment portion of a YAML line — the text after the
+// commentOf returns the comment portion of a YAML line: the text after the
 // "#". A "#" opens a comment only at line start or when preceded by
 // whitespace, matching YAML's inline-comment rule. This is a heuristic: it
 // does not track quoted strings, but only the specific directive tokens are

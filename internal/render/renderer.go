@@ -23,6 +23,11 @@ type Enableable interface {
 	IsEnabled() bool
 }
 
+// WorkspaceAware renderers anchor relative config paths at the workspace root.
+type WorkspaceAware interface {
+	SetWorkspaceRoot(root string)
+}
+
 type Registry struct {
 	mu        sync.RWMutex
 	providers []Renderer
@@ -65,6 +70,19 @@ func (r *Registry) Configure(configs map[string]json.RawMessage) {
 	}
 }
 
+// SetWorkspaceRoot forwards a filesystem path (not a URI) to every
+// WorkspaceAware renderer.
+func (r *Registry) SetWorkspaceRoot(root string) {
+	r.mu.RLock()
+	providers := append([]Renderer(nil), r.providers...)
+	r.mu.RUnlock()
+	for _, p := range providers {
+		if w, ok := p.(WorkspaceAware); ok {
+			w.SetWorkspaceRoot(root)
+		}
+	}
+}
+
 func (r *Registry) All() []Renderer {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
@@ -85,6 +103,9 @@ func AnalyzeDocument(uri, path, text string) *SourceDocument {
 	var head struct {
 		APIVersion string `yaml:"apiVersion"`
 		Kind       string `yaml:"kind"`
+		Metadata   struct {
+			Name string `yaml:"name"`
+		} `yaml:"metadata"`
 	}
 	if err := yaml.NodeToValue(doc.Body, &head); err != nil {
 		return nil
@@ -100,6 +121,7 @@ func AnalyzeDocument(uri, path, text string) *SourceDocument {
 		AST:      parsed.File,
 		Kind:     head.Kind,
 		APIGroup: group + versionSep(group, version),
+		Name:     head.Metadata.Name,
 	}
 }
 

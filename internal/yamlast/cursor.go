@@ -74,8 +74,8 @@ func (v *cursorVisitor) Visit(n ast.Node) ast.Visitor {
 // pathToPointer converts goccy's YAMLPath (e.g. `$.a.'b.c'[0]`) into an RFC
 // 6901 JSON Pointer. goccy single-quotes keys containing metacharacters, so
 // a quoted segment is taken verbatim (dots inside it are part of the key),
-// and every key segment is JSON-Pointer escaped so '/' and '~' survive — the
-// same escaping the indent fallback uses, keeping both paths consistent.
+// and every key segment is JSON-Pointer escaped so '/' and '~' survive. The
+// indent fallback uses the same escaping, keeping both paths consistent.
 func pathToPointer(yp string) string {
 	rest := strings.TrimPrefix(yp, "$")
 	if rest == "" {

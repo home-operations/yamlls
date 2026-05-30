@@ -54,7 +54,7 @@ func expandRef(ref, root string) string {
 }
 
 // LoadFile reads a YAML config file. A missing file returns Settings{}
-// and nil — callers should not treat absence as an error.
+// and nil; callers should not treat absence as an error.
 func LoadFile(path string) (Settings, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {

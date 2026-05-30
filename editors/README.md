@@ -19,4 +19,4 @@ yayamlls_{version}_{os}_{arch}.zip      # windows
 | Zed | Rust → WASM (`zed_extension_api`) | [`zed/`](./zed) | downloaded to the extension work dir; override with `binary.path` |
 
 For editors with built-in LSP support (Neovim, Helix) you don't need an
-extension — see the "Editor setup" section of the top-level [README](../README.md).
+extension; see the "Editor setup" section of the top-level [README](../README.md).

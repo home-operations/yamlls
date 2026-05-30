@@ -27,7 +27,7 @@ func FindModelineSchemaForDoc(doc *ast.DocumentNode) string {
 const modelinePrefix = "# yaml-language-server:"
 
 // FindModelineSchema scans the leading comment block for
-// `# yaml-language-server: $schema=…` and returns the URL or path.
+// `# yaml-language-server: $schema=<url>` and returns the URL or path.
 // Stops at the first non-comment line so the directive can't be smuggled
 // in via a string value.
 func FindModelineSchema(text string) string {

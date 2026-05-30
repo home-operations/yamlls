@@ -174,6 +174,7 @@ func (s *Server) applyLayers() {
 	s.settings = effective
 	s.settingsMu.Unlock()
 	s.resolver.SetSettings(effective)
+	s.renderer.SetWorkspaceRoot(uriToPath(s.workspaceRoot))
 	s.renderer.Configure(effective.Renderers)
 }
 

@@ -21,7 +21,7 @@ const docConcurrency = 8
 // Document validates a single file's text. path is the on-disk path used
 // for relative schema resolution. It returns the parse error (if any),
 // per-document schema violations, and one schema-load failure per
-// user-intended ref. yayamlls-disable suppressions are NOT applied here —
+// user-intended ref. It does not apply yayamlls-disable suppressions;
 // callers filter, so the LSP server can suppress rendered diagnostics in
 // the same pass.
 func Document(text, path string, resolver *schema.Resolver, store *schema.Store) []protocol.Diagnostic {

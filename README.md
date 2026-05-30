@@ -6,7 +6,7 @@ sources via [home-operations/flate][flate].
 
 Per-document schema resolution, highest priority first:
 
-1. in-file modeline (`# yaml-language-server: $schema=…`)
+1. in-file modeline (`# yaml-language-server: $schema=<url>`)
 2. workspace `schemas:` glob in `.yayamlls.yaml`
 3. JSON Schema Store catalog (filename match)
 4. Kubernetes `apiVersion`+`kind` → `kubernetes.schemaUrl` template
@@ -28,8 +28,8 @@ override in `.yayamlls.yaml` to point elsewhere. 404s are silently skipped.
 | Workspace config file                          | `.yayamlls.yaml`                    | editor settings only                                        |
 | Flux `HelmRelease` / `Kustomization` rendering | via [flate][flate]                | no                                                          |
 | Formatting                                     | no                                | yes (Prettier)                                              |
-| Custom YAML tags (`!Ref`, …)                   | no                                | yes                                                         |
-| Diagnostic suppression comments                | yes (`# yayamlls-disable…`)         | yes                                                         |
+| Custom YAML tags (`!Ref`, etc.)                | no                                | yes                                                         |
+| Diagnostic suppression comments                | yes (`# yayamlls-disable*`)         | yes                                                         |
 | JSON Schema drafts                             | 04, 06, 07, 2019-09, 2020-12      | 04, 07, 2019-09, 2020-12                                    |
 
 [datree]: https://github.com/datreeio/CRDs-catalog
@@ -88,7 +88,7 @@ lspconfig.yayamlls.setup({})
 
 ### VSCode
 
-Use the extension in [`editors/vscode`](editors/vscode) — it downloads the
+Use the extension in [`editors/vscode`](editors/vscode); it downloads the
 `yayamlls` binary (and `flate` for Flux rendering) on first activation, and
 exposes `yayamlls.*` settings. To build and run it locally, press <kbd>F5</kbd>
 from that directory; to package a `.vsix`, run `vsce package`. See its
@@ -108,7 +108,7 @@ language-servers = ["yayamlls"]
 
 ### Zed
 
-Use the extension in [`editors/zed`](editors/zed) — it registers `yayamlls` as a
+Use the extension in [`editors/zed`](editors/zed); it registers `yayamlls` as a
 language server for the YAML language and downloads the binary for you (install
 it via **zed: install dev extension**). Since Zed bundles its own
 `yaml-language-server`, make `yayamlls` the only one in
@@ -191,7 +191,16 @@ catalogUrl: ""
 #   flate:
 #     enabled: true
 #     binary: flate
+#     # Scan from this path instead of the edited file's directory, so a
+#     # HelmRelease can resolve a source defined elsewhere. Output is scoped
+#     # to the edited resource by metadata.name. Relative to workspace root.
+#     path: kubernetes
 ```
+
+By default `flate` renders the edited file's own directory, which fails when a
+`HelmRelease` references a source (such as an `OCIRepository`) defined
+elsewhere. Set `renderers.flate.path` (typically your cluster root) and
+`flate` follows Flux's `spec.path` references to resolve those dependencies.
 
 See [`.yayamlls.yaml.example`](.yayamlls.yaml.example) for a copyable starter.
 
@@ -215,10 +224,10 @@ bar: also-bad
 # yayamlls-enable
 ```
 
-- `# yayamlls-disable-line` — trailing a value, suppresses that line; on its
+- `# yayamlls-disable-line`: trailing a value, suppresses that line; on its
   own line, suppresses the line below.
-- `# yayamlls-disable` / `# yayamlls-enable` — suppress every line in between.
-- `# yayamlls-disable-file` — suppress the whole file (place it anywhere).
+- `# yayamlls-disable` / `# yayamlls-enable`: suppress every line in between.
+- `# yayamlls-disable-file`: suppress the whole file (place it anywhere).
 
 ## Capabilities
 
@@ -229,8 +238,8 @@ documentLink, documentSymbol, codeAction (enum quick-fix), codeLens.
 
 ## Commands
 
-- `yayamlls.showRendered <uri>` — rendered output for a Flux source.
-- `yayamlls.showRenderedDiff <uri>` — unified diff between the open-time
+- `yayamlls.showRendered <uri>`: rendered output for a Flux source.
+- `yayamlls.showRenderedDiff <uri>`: unified diff between the open-time
   render and the current render.
 
 ## CLI flags
@@ -245,7 +254,7 @@ yayamlls -v N                   log verbosity (0=silent, 1=info, 2+=debug)
 
 `yayamlls validate` (alias `lint`) checks files without an editor, resolving
 schemas the same way the server does (modeline, `.yayamlls.yaml` globs,
-catalog, Kubernetes auto-detect) and honouring `# yayamlls-disable…`
+catalog, Kubernetes auto-detect) and honouring `# yayamlls-disable*`
 comments. Directory arguments are walked for `*.yaml`/`*.yml`.
 
 ```sh

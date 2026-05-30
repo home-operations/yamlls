@@ -66,7 +66,7 @@ func (c *Catalog) Load(onLoaded func()) {
 }
 
 // Match returns the schema URL for docPath, or "" if the catalog has not
-// finished loading yet — it never blocks. A later request matches once the
+// finished loading yet; it never blocks. A later request matches once the
 // background Load completes.
 func (c *Catalog) Match(docPath string) string {
 	if docPath == "" || !c.loaded.Load() || c.loadErr != nil {

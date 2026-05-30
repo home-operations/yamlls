@@ -16,7 +16,7 @@ import (
 // source line, so the kind/name/jsonptr is embedded in each message.
 func renderDiagnostics(store *schema.Store, resolver *schema.Resolver, out *render.RenderedOutput, err error) []protocol.Diagnostic {
 	if err != nil {
-		// The renderer's external tool isn't installed — rendering is an
+		// The renderer's external tool isn't installed; rendering is an
 		// opt-in extra, so stay silent rather than redlining every Flux doc.
 		if errors.Is(err, render.ErrRendererUnavailable) {
 			return nil
