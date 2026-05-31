@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.0.8](https://github.com/home-operations/yayamlls/compare/0.0.7...0.0.8) (2026-05-31)
+
+
+### Bug Fixes
+
+* **lsp:** don't block the message loop on schema fetches ([d35ba98](https://github.com/home-operations/yayamlls/commit/d35ba98d2fc88b54b0afdef3a345a9b07ea19b95))
+
+
+### Documentation
+
+* Explain new name in first line of readme ([b3c93ec](https://github.com/home-operations/yayamlls/commit/b3c93ecadb64a7a07c71b6a72e4a7542e23d793f))
+* Explain new name in first line of readme ([f82cb5e](https://github.com/home-operations/yayamlls/commit/f82cb5ee20899cd7b185334238728166d7442024))
+
 ## [0.0.7](https://github.com/home-operations/yayamlls/compare/0.0.6...0.0.7) (2026-05-30)
 
 
