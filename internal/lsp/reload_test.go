@@ -5,6 +5,7 @@ import (
 	"runtime"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/home-operations/yayamlls/internal/render"
 	"github.com/tliron/glsp"
@@ -23,18 +24,18 @@ func schemaModeline(t *testing.T) string {
 
 type recorder struct {
 	mu   sync.Mutex
-	last map[string][]protocol.Diagnostic
+	last map[string]protocol.PublishDiagnosticsParams
 }
 
 func (r *recorder) ctx() *glsp.Context {
-	r.last = map[string][]protocol.Diagnostic{}
+	r.last = map[string]protocol.PublishDiagnosticsParams{}
 	return &glsp.Context{Notify: func(method string, params any) {
 		if method != protocol.ServerTextDocumentPublishDiagnostics {
 			return
 		}
 		p := params.(protocol.PublishDiagnosticsParams)
 		r.mu.Lock()
-		r.last[p.URI] = p.Diagnostics
+		r.last[p.URI] = p
 		r.mu.Unlock()
 	}}
 }
@@ -42,7 +43,25 @@ func (r *recorder) ctx() *glsp.Context {
 func (r *recorder) diags(uri string) []protocol.Diagnostic {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	return r.last[uri]
+	return r.last[uri].Diagnostics
+}
+
+// waitVersion blocks until diagnostics for uri at version v (or newer) have
+// been published, since publishing is now asynchronous. Local-file schemas
+// resolve in well under the timeout.
+func (r *recorder) waitVersion(t *testing.T, uri string, v uint32) {
+	t.Helper()
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		r.mu.Lock()
+		p, ok := r.last[uri]
+		r.mu.Unlock()
+		if ok && p.Version != nil && *p.Version >= v {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for diagnostics version %d on %s", v, uri)
 }
 
 func TestSettings_OverridesSurviveWorkspaceFolderChange(t *testing.T) {
@@ -84,6 +103,7 @@ func TestDiagnostics_ReloadOnWholeChange(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("didOpen: %v", err)
 	}
+	rec.waitVersion(t, uri, 1)
 	if len(rec.diags(uri)) == 0 {
 		t.Fatalf("expected a diagnostic for the bad age, got none")
 	}
@@ -94,6 +114,7 @@ func TestDiagnostics_ReloadOnWholeChange(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("didChange: %v", err)
 	}
+	rec.waitVersion(t, uri, 2)
 	if got := rec.diags(uri); len(got) != 0 {
 		t.Fatalf("expected diagnostics cleared after fix, got %+v", got)
 	}
@@ -113,6 +134,7 @@ func TestDiagnostics_ReloadOnIncrementalChange(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("didOpen: %v", err)
 	}
+	rec.waitVersion(t, uri, 1)
 	if got := rec.diags(uri); len(got) != 0 {
 		t.Fatalf("expected no diagnostics on open, got %+v", got)
 	}
@@ -131,6 +153,7 @@ func TestDiagnostics_ReloadOnIncrementalChange(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("didChange: %v", err)
 	}
+	rec.waitVersion(t, uri, 2)
 	if got := rec.diags(uri); len(got) == 0 {
 		t.Fatalf("expected a diagnostic after making age a string, got none")
 	}

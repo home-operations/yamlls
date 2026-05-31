@@ -36,6 +36,11 @@ type Server struct {
 	connMu     sync.Mutex
 	connNotify glsp.NotifyFunc
 
+	// pubSeq supersedes async diagnostic publishes: each publish bumps the
+	// per-URI counter, and a goroutine drops its result if a newer one started.
+	pubMu  sync.Mutex
+	pubSeq map[string]uint64
+
 	// settings is the effective merge; workspaceSettings (from .yayamlls.yaml)
 	// is the lowest-precedence layer and overrides holds initializationOptions
 	// + didChangeConfiguration. Tracking the layers separately lets a
@@ -60,6 +65,7 @@ func New(version string, registry *render.Registry) *Server {
 		renderedDiags:    make(map[string][]protocol.Diagnostic),
 		renderedRaw:      make(map[string][]byte),
 		renderedBaseline: make(map[string][]byte),
+		pubSeq:           make(map[string]uint64),
 		version:          version,
 	}
 	s.pipeline = render.NewPipeline(registry, s)
@@ -241,32 +247,20 @@ func (s *Server) Notify(uri string, out *render.RenderedOutput, err error) {
 	}
 	s.rendMu.Unlock()
 
-	s.connMu.Lock()
-	notify := s.connNotify
-	s.connMu.Unlock()
-	if notify == nil {
-		return
-	}
 	d, ok := s.docs.Get(uri)
 	if !ok {
 		return
 	}
-	s.publishWith(notify, d)
+	s.schedulePublish(d)
 }
 
 // republishOpen recomputes diagnostics for every open document. Used as the
 // resolver's reload hook so docs resolved via the background-loaded catalog
 // get their diagnostics once it becomes available.
 func (s *Server) republishOpen() {
-	s.connMu.Lock()
-	notify := s.connNotify
-	s.connMu.Unlock()
-	if notify == nil {
-		return
-	}
 	for _, uri := range s.docs.AllURIs() {
 		if d, ok := s.docs.Get(uri); ok {
-			s.publishWith(notify, d)
+			s.schedulePublish(d)
 		}
 	}
 }
@@ -282,17 +276,55 @@ func (s *Server) captureNotify(ctx *glsp.Context) {
 	s.connMu.Unlock()
 }
 
-func (s *Server) publishWith(notify glsp.NotifyFunc, d *document.Document) {
-	// nil marshals to `null`; clients keep stale diagnostics on `null`.
-	diags := lint.Document(d.Text, uriToPath(d.URI), s.resolver, s.schemas)
-	diags = append(diags, s.renderedDiagnosticsFor(d.URI)...)
-	diags = diagnostics.ParseSuppressions(d.Text).Filter(diags)
-	v := protocol.UInteger(d.Version)
-	notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
-		URI:         d.URI,
-		Version:     &v,
-		Diagnostics: diags,
-	})
+// schedulePublish computes and publishes diagnostics off the message loop.
+// lint.Document can block on a network schema fetch and glsp dispatches
+// serially, so running it inline would freeze every other file until the fetch
+// returns. The sequence guard drops a result superseded by a newer edit or a
+// close.
+func (s *Server) schedulePublish(d *document.Document) {
+	notify := s.currentNotify()
+	if notify == nil {
+		return
+	}
+	uri := d.URI
+	s.pubMu.Lock()
+	s.pubSeq[uri]++
+	seq := s.pubSeq[uri]
+	s.pubMu.Unlock()
+
+	go func() {
+		// nil marshals to `null`; clients keep stale diagnostics on `null`.
+		diags := lint.Document(d.Text, uriToPath(uri), s.resolver, s.schemas)
+		diags = append(diags, s.renderedDiagnosticsFor(uri)...)
+		diags = diagnostics.ParseSuppressions(d.Text).Filter(diags)
+
+		s.pubMu.Lock()
+		current := s.pubSeq[uri] == seq
+		s.pubMu.Unlock()
+		if !current {
+			return
+		}
+		v := protocol.UInteger(d.Version)
+		notify(protocol.ServerTextDocumentPublishDiagnostics, protocol.PublishDiagnosticsParams{
+			URI:         uri,
+			Version:     &v,
+			Diagnostics: diags,
+		})
+	}()
+}
+
+func (s *Server) currentNotify() glsp.NotifyFunc {
+	s.connMu.Lock()
+	defer s.connMu.Unlock()
+	return s.connNotify
+}
+
+// forgetPublish drops a closed document's counter so an in-flight publish
+// goroutine sees it was superseded and won't resurrect diagnostics.
+func (s *Server) forgetPublish(uri string) {
+	s.pubMu.Lock()
+	delete(s.pubSeq, uri)
+	s.pubMu.Unlock()
 }
 
 func (s *Server) renderedDiagnosticsFor(uri string) []protocol.Diagnostic {

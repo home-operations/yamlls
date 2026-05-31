@@ -47,6 +47,20 @@ func NewStore() *Store {
 	}
 }
 
+// Cached returns an already-compiled schema without any network I/O, so
+// handlers on the message loop (hover, completion, code actions) never block
+// on a fetch. ok is false until the diagnostics path has loaded it.
+func (s *Store) Cached(ref, docPath string) (*jsonschema.Schema, bool) {
+	key, err := absRef(ref, docPath)
+	if err != nil {
+		return nil, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	sch, ok := s.compiled[key]
+	return sch, ok
+}
+
 func (s *Store) Get(ref, docPath string) (*jsonschema.Schema, error) {
 	key, err := absRef(ref, docPath)
 	if err != nil {

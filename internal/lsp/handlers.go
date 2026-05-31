@@ -46,6 +46,7 @@ func (s *Server) didChange(ctx *glsp.Context, params *protocol.DidChangeTextDocu
 
 func (s *Server) didClose(ctx *glsp.Context, params *protocol.DidCloseTextDocumentParams) error {
 	uri := params.TextDocument.URI
+	s.forgetPublish(uri)
 	s.clearDiagnostics(ctx, uri)
 	s.docs.Close(uri)
 	s.pipeline.Cancel(uri)
@@ -53,8 +54,10 @@ func (s *Server) didClose(ctx *glsp.Context, params *protocol.DidCloseTextDocume
 	return nil
 }
 
-// schemaAtCursor resolves the schema for the doc the cursor is inside,
-// which can differ per doc in multi-doc files.
+// schemaAtCursor resolves the schema for the doc the cursor is inside, which
+// can differ per doc in multi-doc files. It reads only the compiled-schema
+// cache, never fetching: these handlers run on the message loop, and the
+// diagnostics path already triggers the fetch.
 func (s *Server) schemaAtCursor(uri string, pos protocol.Position) *jsonschema.Schema {
 	d, ok := s.docs.Get(uri)
 	if !ok {
@@ -72,8 +75,8 @@ func (s *Server) schemaAtCursor(uri string, pos protocol.Position) *jsonschema.S
 	if ref == "" {
 		return nil
 	}
-	sch, err := s.schemas.Get(ref, path)
-	if err != nil {
+	sch, ok := s.schemas.Cached(ref, path)
+	if !ok {
 		return nil
 	}
 	return sch
@@ -239,7 +242,7 @@ func (s *Server) publishDiagnostics(ctx *glsp.Context, d *document.Document) {
 	if src := render.AnalyzeDocument(d.URI, uriToPath(d.URI), d.Text); src != nil {
 		s.pipeline.Schedule(src)
 	}
-	s.publishWith(ctx.Notify, d)
+	s.schedulePublish(d)
 }
 
 func (s *Server) clearDiagnostics(ctx *glsp.Context, uri string) {
